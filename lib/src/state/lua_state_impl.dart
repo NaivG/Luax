@@ -455,6 +455,7 @@ class LuaStateImpl implements LuaState, LuaVM {
     Object? val = _stack!.get(idx);
     if (val is String) {
       pushInteger(val.length);
+      return;
     }
 
     Object? mm = getMetamethod(val, val, "__len");
