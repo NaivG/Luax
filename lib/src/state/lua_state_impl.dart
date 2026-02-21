@@ -1556,14 +1556,60 @@ class LuaStateImpl implements LuaState, LuaVM {
 
   @override
   void resume(int nArgs) {
-    // Resume execution from a yield point
-    // The stack should have the arguments on top, with the closure below
+    // Resume execution from a yield point.
     if (_stack!.closure == null) {
       throw Exception('No closure to resume');
     }
 
-    // Continue running the Lua closure
+    // Continue the innermost frame that was interrupted by yield.
     _runLuaClosure();
+
+    // Unwind nested Lua function calls that were interrupted by yield.
+    // Stop when the parent frame has no Lua proto (i.e. it's the root).
+    while (_stack!.prev != null &&
+        _stack!.prev!.closure?.proto != null) {
+      final innerStack = _stack!;
+      final nRegs = innerStack.closure?.proto?.maxStackSize ?? 0;
+      final results = innerStack.popN(innerStack.top() - nRegs);
+
+      _popLuaStack();
+
+      // The outer frame's PC is past the CALL instruction that invoked
+      // the inner function (fetch() advanced it before executing CALL).
+      final callInstr = _stack!.closure!.proto!.code[_stack!.pc - 1];
+      final a = Instruction.getA(callInstr) + 1;
+      final c = Instruction.getC(callInstr);
+
+      // Place results into the correct registers, mirroring popResults.
+      if (c == 1) {
+        // No results expected.
+      } else if (c > 1) {
+        final nResults = c - 1;
+        _stack!.pushN(results, nResults);
+        for (int j = a + nResults - 1; j >= a; j--) {
+          replace(j);
+        }
+      } else {
+        // c == 0: variable results — leave on stack.
+        _stack!.pushN(results, results.length);
+        checkStack(1);
+        pushInteger(a);
+      }
+
+      // Continue the outer frame's bytecode.
+      _runLuaClosure();
+    }
+
+    // The current frame is now the coroutine body function, sitting
+    // above the root frame. Pop it and transfer only the return values
+    // so that _coResume's co.getTop() sees results, not locals.
+    if (_stack!.prev != null && _stack!.closure?.proto != null) {
+      final bodyStack = _stack!;
+      final nRegs = bodyStack.closure!.proto!.maxStackSize;
+      final results = bodyStack.popN(bodyStack.top() - nRegs);
+      _popLuaStack();
+      _stack!.pushN(results, results.length);
+    }
   }
 
   @override
