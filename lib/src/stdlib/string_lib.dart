@@ -473,7 +473,8 @@ class StringLib {
             last = captures[i];
           }
         }
-        s = s!.substring(s!.lastIndexOf(last!) + last.length + 1);
+        var newStart = s!.indexOf(last!) + last.length;
+        s = newStart >= s!.length ? '' : s!.substring(newStart);
         return captures.length;
       } else {
         return 0;
