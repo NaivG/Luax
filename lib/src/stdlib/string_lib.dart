@@ -350,7 +350,7 @@ class StringLib {
     if (plain) {
       start = tail.indexOf(pattern);
     } else {
-      start = tail.indexOf(RegExp(pattern));
+      start = tail.indexOf(RegExp(luaPatternToRegex(pattern)));
     }
     var end = start + pattern.length - 1;
 
@@ -398,7 +398,7 @@ class StringLib {
       tail = s!.substring(init - 1);
     }
 
-    var regExpMatch = RegExp(pattern).firstMatch(tail!);
+    var regExpMatch = RegExp(luaPatternToRegex(pattern)).firstMatch(tail!);
     if (regExpMatch == null) return null;
     return [regExpMatch.group(0)];
   }
@@ -425,7 +425,7 @@ class StringLib {
       return [s ?? '', 0];
     }
 
-    final regExp = RegExp(pattern);
+    final regExp = RegExp(luaPatternToRegex(pattern));
     int nMatches = 0;
 
     // If n < 0, replace all occurrences (unlimited)
@@ -486,6 +486,87 @@ class StringLib {
   }
 
 /* helper */
+
+  /// Lua character class `%x` → Dart regex equivalent.
+  static String? _luaClassToRegex(String c) {
+    switch (c) {
+      case 'a': return '[a-zA-Z]';
+      case 'A': return '[^a-zA-Z]';
+      case 'd': return r'\d';
+      case 'D': return r'\D';
+      case 'l': return '[a-z]';
+      case 'L': return '[^a-z]';
+      case 'u': return '[A-Z]';
+      case 'U': return '[^A-Z]';
+      case 'w': return '[a-zA-Z0-9]';
+      case 'W': return '[^a-zA-Z0-9]';
+      case 's': return r'\s';
+      case 'S': return r'\S';
+      case 'p': return r'[^\w\s]';
+      case 'P': return r'[\w\s]';
+      case 'x': return '[0-9a-fA-F]';
+      case 'X': return '[^0-9a-fA-F]';
+      case 'c': return '[\x00-\x1f\x7f]';
+      case 'C': return '[^\x00-\x1f\x7f]';
+      default:  return null;
+    }
+  }
+
+  /// Convert a Lua pattern string to a Dart [RegExp] pattern.
+  static String luaPatternToRegex(String pat) {
+    final buf = StringBuffer();
+    final len = pat.length;
+    var i = 0;
+    var inBracket = false;
+
+    while (i < len) {
+      final c = pat[i];
+
+      if (c == '%' && i + 1 < len) {
+        final next = pat[i + 1];
+        if (next == '%') {
+          buf.write('%');
+        } else {
+          final cls = _luaClassToRegex(next);
+          if (cls != null) {
+            buf.write(cls);
+          } else {
+            buf.write('\\');
+            buf.write(next);
+          }
+        }
+        i += 2;
+        continue;
+      }
+
+      if (c == '[' && !inBracket) {
+        inBracket = true;
+        buf.write(c);
+        i++;
+        continue;
+      }
+      if (c == ']' && inBracket) {
+        inBracket = false;
+        buf.write(c);
+        i++;
+        continue;
+      }
+
+      if (c == '-' && !inBracket && i > 0 && i + 1 < len) {
+        final prev = pat[i - 1];
+        if (prev != '*' && prev != '+' && prev != '?' && prev != '-') {
+          buf.write('*?');
+          i++;
+          continue;
+        }
+      }
+
+      buf.write(c);
+      i++;
+    }
+
+    return buf.toString();
+  }
 
 /* translate a relative string position: negative means back from end */
   static int posRelat(int pos, int len) {
