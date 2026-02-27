@@ -311,7 +311,7 @@ class StringLib {
   static int _strFind(LuaState ls) {
     var s = ls.checkString(1)!;
     var sLen = s.length;
-    var pattern = ls.checkString(2);
+    var pattern = ls.checkString(2)!;
     var init = posRelat(ls.optInteger(3, 1)!, sLen);
     if (init < 1) {
       init = 1;
@@ -322,17 +322,42 @@ class StringLib {
     }
     var plain = ls.toBoolean(4);
 
-    var range = find(s, pattern!, init, plain);
-    var start = range[0]!;
-    var end = range[1];
+    var tail = s;
+    if (init > 1) {
+      tail = s.substring(init - 1);
+    }
 
-    if (start < 0) {
+    if (plain) {
+      var idx = tail.indexOf(pattern);
+      if (idx < 0) {
+        ls.pushNil();
+        return 1;
+      }
+      var start = idx + s.length - tail.length + 1;
+      var end = start + pattern.length - 1;
+      ls.pushInteger(start);
+      ls.pushInteger(end);
+      return 2;
+    }
+
+    var regex = RegExp(luaPatternToRegex(pattern));
+    var m = regex.firstMatch(tail);
+    if (m == null) {
       ls.pushNil();
       return 1;
     }
+
+    var offset = s.length - tail.length;
+    var start = m.start + offset + 1; // 1-based
+    var end = m.start + m.group(0)!.length + offset; // 1-based inclusive
     ls.pushInteger(start);
     ls.pushInteger(end);
-    return 2;
+
+    // Push capture groups if any.
+    for (var i = 1; i <= m.groupCount; i++) {
+      ls.pushString(m.group(i));
+    }
+    return 2 + m.groupCount;
   }
 
   static List<int?> find(String s, String pattern, int init, bool plain) {

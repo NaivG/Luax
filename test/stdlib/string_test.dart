@@ -93,6 +93,18 @@ void main() {
     expect(ls.toInteger(-1), equals(11));
   });
 
+  test('string.find returns capture groups', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return string.find("2026-02-27", "(%d+)-(%d+)-(%d+)")');
+    ls.call(0, 5);
+    expect(ls.toInteger(-5), equals(1));  // start
+    expect(ls.toInteger(-4), equals(10)); // end
+    expect(ls.toStr(-3), equals('2026'));
+    expect(ls.toStr(-2), equals('02'));
+    expect(ls.toStr(-1), equals('27'));
+  });
+
   test('string.format %e', () {
     LuaState ls = LuaState.newState();
     ls.openLibs();
