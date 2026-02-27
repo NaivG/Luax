@@ -120,6 +120,15 @@ void main() {
     expect(ls.toNumber(-1), equals(15.0));
   });
 
+  test('string.byte coerces string index arg', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    // string.rep uses checkInteger which calls toIntegerX
+    ls.loadString(r'return string.rep("ab", "3")');
+    ls.call(0, 1);
+    expect(ls.toStr(-1), equals('ababab'));
+  });
+
   test('math.abs coerces string arg to number', () {
     LuaState ls = LuaState.newState();
     ls.openLibs();

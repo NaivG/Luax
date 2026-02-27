@@ -318,7 +318,19 @@ class LuaStateImpl implements LuaState, LuaVM {
   @override
   int? toIntegerX(int idx) {
     Object? val = _stack!.get(idx);
-    return val is int ? val : null;
+    if (val is int) return val;
+    if (val is double) {
+      if (val == val.toInt().toDouble()) return val.toInt();
+      return null;
+    }
+    if (val is String) {
+      var i = int.tryParse(val);
+      if (i != null) return i;
+      var d = double.tryParse(val);
+      if (d != null && d == d.toInt().toDouble()) return d.toInt();
+      return null;
+    }
+    return null;
   }
 
   @override
