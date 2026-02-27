@@ -21,7 +21,7 @@ extension LuaStateDebug on LuaState {
           _print(i,t);
           break;
 
-        case LuaType.luaNil:
+        case LuaType.luaBoolean:
           _print(i,t,"${this.toBoolean(i) ? "true" : "false"}");
           break;
 
