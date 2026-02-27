@@ -556,6 +556,25 @@ class StringLib {
     return parsed;
   }
 
+  /// Lua %q: produce a string in double quotes with proper escaping.
+  static String _fmtQuoted(String s) {
+    final buf = StringBuffer('"');
+    for (var i = 0; i < s.length; i++) {
+      final c = s[i];
+      switch (c) {
+        case '\\': buf.write('\\\\'); break;
+        case '"': buf.write('\\"'); break;
+        case '\n': buf.write('\\n'); break;
+        case '\r': buf.write('\\r'); break;
+        case '\x00': buf.write('\\0'); break;
+        case '\x1a': buf.write('\\26'); break;
+        default: buf.write(c); break;
+      }
+    }
+    buf.write('"');
+    return buf.toString();
+  }
+
   static String? _fmtArg(String tag, LuaState ls, int argIdx) {
     switch (tag[tag.length - 1]) {
       // specifier
@@ -579,9 +598,10 @@ class StringLib {
       case 'g':
       case 'G': // general float
         return sprintf(tag, [ls.toNumber(argIdx)]);
-      case 's':
-      case 'q': // string
+      case 's': // string
         return sprintf(tag, [ls.toString2(argIdx)]);
+      case 'q': // quoted string — Lua-specific escaping
+        return _fmtQuoted(ls.toString2(argIdx) ?? 'nil');
       default:
         throw Exception("todo! tag=" + tag);
     }

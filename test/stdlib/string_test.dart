@@ -220,6 +220,39 @@ void main() {
     expect(ls.toStr(-2), equals('bac'));
   });
 
+  test('string.format %q basic', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return string.format("%q", "hello world")');
+    ls.call(0, 1);
+    expect(ls.toStr(-1), equals('"hello world"'));
+  });
+
+  test('string.format %q escapes special chars', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'''
+      return string.format("%q", 'he said "hi"')
+    ''');
+    ls.call(0, 1);
+    var result = ls.toStr(-1)!;
+    expect(result, contains(r'\"'));
+    expect(result.startsWith('"'), isTrue);
+    expect(result.endsWith('"'), isTrue);
+  });
+
+  test('string.format %q escapes backslash and newline', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'''
+      return string.format("%q", "line1\nline2\\end")
+    ''');
+    ls.call(0, 1);
+    var result = ls.toStr(-1)!;
+    expect(result, contains(r'\n'));
+    expect(result, contains(r'\\'));
+  });
+
   test('string.gsub with function replacement', () {
     LuaState ls = LuaState.newState();
     ls.openLibs();
