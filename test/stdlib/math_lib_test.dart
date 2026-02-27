@@ -61,6 +61,26 @@ void main() {
     expect(ls.toNumber(-1), equals(1));
   });
 
+  test('right shift preserves high bits correctly', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    // -1 >> 1 should be 0x7FFFFFFFFFFFFFFF (all bits except top)
+    // With 60-bit mask, bits 60-62 would be zeroed
+    ls.loadString(r'return -1 >> 1');
+    ls.call(0, 1);
+    expect(ls.toInteger(-1), equals(0x7FFFFFFFFFFFFFFF));
+  });
+
+  test('right shift by 1 of a value with bit 62 set', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    // 0x4000000000000000 >> 1 = 0x2000000000000000
+    // With bad mask, bit 61 (in 0x2000...) would be zeroed
+    ls.loadString(r'return 0x4000000000000000 >> 1');
+    ls.call(0, 1);
+    expect(ls.toInteger(-1), equals(0x2000000000000000));
+  });
+
   group('Math Library Tests', () {
     late LuaState lua;
 

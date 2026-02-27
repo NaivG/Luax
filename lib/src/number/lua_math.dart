@@ -46,6 +46,9 @@ class LuaMath {
 extension  LogicalRightShift on  int{
 
   int logicalRShift(int size){
-    return (this >> size) & rShiftMask;
+    if (size <= 0) return this;
+    if (size >= 64) return 0;
+    // Arithmetic right shift, then mask off the sign-extended high bits.
+    return (this >> size) & ~((-1) << (64 - size));
   }
 }
