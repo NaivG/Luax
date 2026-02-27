@@ -25,6 +25,16 @@ print('sec:'..(os.clock()-start))
 }
 
 void main() {
+  test('os.clock returns a small number (not epoch seconds)', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return os.clock()');
+    ls.call(0, 1);
+    var clock = ls.toNumber(-1);
+    // Should be process CPU-ish time, not epoch (which would be > 1e9)
+    expect(clock, lessThan(1000000));
+  });
+
   test('lua OS standard library test', () {
     expect(testOS(), true);
   });

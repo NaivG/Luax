@@ -2,6 +2,9 @@ import '../../lua.dart';
 import '../platform/platform.dart';
 
 class OSLib {
+  /// Monotonic stopwatch started on first use, approximating CPU time.
+  static final Stopwatch _clock = Stopwatch()..start();
+
   static const Map<String, DartFunction> _sysFuncs = {
     "clock": _osClock,
     "difftime": _osDiffTime,
@@ -25,7 +28,7 @@ class OSLib {
 // http://www.lua.org/manual/5.3/manual.html#pdf-os.clock
 // lua-5.3.4/src/loslib.c#os_clock()
   static int _osClock(LuaState ls) {
-    ls.pushNumber(DateTime.now().millisecondsSinceEpoch/1000);
+    ls.pushNumber(_clock.elapsedMicroseconds / 1000000.0);
     return 1;
   }
 
