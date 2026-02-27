@@ -269,7 +269,9 @@ class MathLib{
   static int _ult(LuaState ls){
     var m = ls.checkInteger(1)!;
     var n = ls.checkInteger(2)!;
-    ls.pushBoolean(m < n);
+    // Unsigned comparison: flip sign bit to convert unsigned order to signed.
+    const signBit = -9223372036854775808; // 1 << 63
+    ls.pushBoolean((m ^ signBit) < (n ^ signBit));
     return 1;
   }
 

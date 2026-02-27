@@ -3,6 +3,22 @@ import 'package:lua_dardo_plus/lua.dart';
 import 'package:test/test.dart';
 
 void main() {
+  test('math.ult unsigned: -1 is max, not less than 1', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return math.ult(-1, 1)');
+    ls.call(0, 1);
+    expect(ls.toBoolean(-1), equals(false));
+  });
+
+  test('math.ult unsigned: 1 < max', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return math.ult(1, -1)');
+    ls.call(0, 1);
+    expect(ls.toBoolean(-1), equals(true));
+  });
+
   group('Math Library Tests', () {
     late LuaState lua;
 
