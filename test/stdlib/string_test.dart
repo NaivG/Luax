@@ -216,6 +216,30 @@ void main() {
     expect(ls.toStr(-2), equals('[hello]'));
   });
 
+  test('hex float literal with negative exponent', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return 0x1p-3');
+    ls.call(0, 1);
+    expect(ls.toNumber(-1), equals(0.125));
+  });
+
+  test('float literal with negative exponent', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return 1e-2');
+    ls.call(0, 1);
+    expect(ls.toNumber(-1), equals(0.01));
+  });
+
+  test('hex float with positive exponent', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return 0x1p4');
+    ls.call(0, 1);
+    expect(ls.toNumber(-1), equals(16.0));
+  });
+
   test('lua table standard library test', () {
     expect(testString(), true);
   });

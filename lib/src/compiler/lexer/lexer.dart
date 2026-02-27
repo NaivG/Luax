@@ -391,18 +391,28 @@ class Lexer {
   }
 
   String readNumeral() {
-    String expo = "Ee";
+    String expo1 = 'E';
+    String expo2 = 'e';
     String first = chunk.current;
     _save_and_next();
-    if (first == '0' && chunk.startsWith("xX"))  /* hexadecimal? */
-      expo = "Pp";
+    if (first == '0' && (chunk.current == 'x' || chunk.current == 'X')) {
+      expo1 = 'P';
+      expo2 = 'p';
+      _save_and_next(); // consume 'x' or 'X'
+    }
 
     for (;;) {
-      if (chunk.startsWith(expo))  /* exponent part? */
-        chunk.startsWith("-+");  /* optional exponent sign */
-      if (CharSequence.isxDigit(chunk.current) || chunk.current == '.')
+      if (chunk.current == expo1 || chunk.current == expo2) {
+        _save_and_next(); // consume exponent char
+        // optional exponent sign
+        if (chunk.current == '-' || chunk.current == '+') {
+          _save_and_next();
+        }
+      } else if (CharSequence.isxDigit(chunk.current) || chunk.current == '.') {
         _save_and_next();
-      else break;
+      } else {
+        break;
+      }
     }
     return _buff.toString();
   }
