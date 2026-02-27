@@ -125,6 +125,73 @@ void main() {
     expect(ls.toStr(-1), equals('3.14'));
   });
 
+  test('string.gmatch basic iteration', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'''
+      local result = {}
+      for w in string.gmatch("hello world foo", "%a+") do
+        result[#result + 1] = w
+      end
+      return result[1], result[2], result[3]
+    ''');
+    ls.call(0, 3);
+    expect(ls.toStr(-3), equals('hello'));
+    expect(ls.toStr(-2), equals('world'));
+    expect(ls.toStr(-1), equals('foo'));
+  });
+
+  test('string.gmatch with captures', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'''
+      local keys = {}
+      local vals = {}
+      for k, v in string.gmatch("a=1, b=2, c=3", "(%a)=(%d)") do
+        keys[#keys + 1] = k
+        vals[#vals + 1] = v
+      end
+      return keys[1], vals[1], keys[2], vals[2], keys[3], vals[3]
+    ''');
+    ls.call(0, 6);
+    expect(ls.toStr(-6), equals('a'));
+    expect(ls.toStr(-5), equals('1'));
+    expect(ls.toStr(-4), equals('b'));
+    expect(ls.toStr(-3), equals('2'));
+    expect(ls.toStr(-2), equals('c'));
+    expect(ls.toStr(-1), equals('3'));
+  });
+
+  test('string.gmatch capture text appears before match', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'''
+      local result = {}
+      for w in string.gmatch("1a1", "a(%d)") do
+        result[#result + 1] = w
+      end
+      return #result, result[1]
+    ''');
+    ls.call(0, 2);
+    expect(ls.toInteger(-2), equals(1));
+    expect(ls.toStr(-1), equals('1'));
+  });
+
+  test('string.gmatch no infinite loop on empty match', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'''
+      local count = 0
+      for w in string.gmatch("abc", ".-") do
+        count = count + 1
+        if count > 10 then break end
+      end
+      return count
+    ''');
+    ls.call(0, 1);
+    expect(ls.toInteger(-1), lessThan(11));
+  });
+
   test('lua table standard library test', () {
     expect(testString(), true);
   });

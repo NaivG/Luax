@@ -475,28 +475,41 @@ class StringLib {
 // string.gmatch (s, pattern)
 // http://www.lua.org/manual/5.3/manual.html#pdf-string.gmatch
   static int _strGmatch(LuaState ls) {
-    var s = ls.checkString(1);
-    var pattern = ls.checkString(2);
+    var s = ls.checkString(1)!;
+    var pattern = ls.checkString(2)!;
+    var regex = RegExp(luaPatternToRegex(pattern));
+    var offset = 0;
 
-    Function gmatchAux = (LuaState ls) {
-      var captures = match(s, pattern!, 1);
-      if (captures != null) {
-        String? last;
-        for (var i = 0; i < captures.length; i++) {
-          ls.pushString(captures[i]);
-          if (i == captures.length - 1) {
-            last = captures[i];
-          }
+    int gmatchAux(LuaState ls) {
+      while (offset <= s.length) {
+        var tail = s.substring(offset);
+        var m = regex.firstMatch(tail);
+        if (m == null) return 0;
+
+        // Advance past this match; if empty match, advance by 1 to avoid
+        // infinite loop.
+        var matchEnd = offset + m.end;
+        if (m.end == m.start) {
+          offset = matchEnd + 1;
+        } else {
+          offset = matchEnd;
         }
-        var newStart = s!.indexOf(last!) + last.length;
-        s = newStart >= s!.length ? '' : s!.substring(newStart);
-        return captures.length;
-      } else {
-        return 0;
-      }
-    };
 
-    ls.pushDartFunction(gmatchAux as int Function(LuaState));
+        // If pattern has capture groups, return those; otherwise full match.
+        if (m.groupCount > 0) {
+          for (var i = 1; i <= m.groupCount; i++) {
+            ls.pushString(m.group(i));
+          }
+          return m.groupCount;
+        } else {
+          ls.pushString(m.group(0));
+          return 1;
+        }
+      }
+      return 0;
+    }
+
+    ls.pushDartFunction(gmatchAux);
     return 1;
   }
 
