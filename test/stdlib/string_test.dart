@@ -252,6 +252,81 @@ void main() {
     expect(ls.toNumber(-1), equals(16.0));
   });
 
+  test('string.pack and unpack integers', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'''
+      local s = string.pack("<i4i4", 1, 2)
+      local a, b = string.unpack("<i4i4", s)
+      return a, b
+    ''');
+    ls.call(0, 2);
+    expect(ls.toInteger(-2), equals(1));
+    expect(ls.toInteger(-1), equals(2));
+  });
+
+  test('string.pack and unpack byte and double', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'''
+      local s = string.pack("Bd", 255, 3.14)
+      local a, b = string.unpack("Bd", s)
+      return a, b
+    ''');
+    ls.call(0, 2);
+    expect(ls.toInteger(-2), equals(255));
+    expect(ls.toNumber(-1), closeTo(3.14, 0.0001));
+  });
+
+  test('string.pack and unpack string with length prefix', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'''
+      local s = string.pack("s4", "hello")
+      local result = string.unpack("s4", s)
+      return result
+    ''');
+    ls.call(0, 1);
+    expect(ls.toStr(-1), equals('hello'));
+  });
+
+  test('string.pack and unpack zero-terminated string', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'''
+      local s = string.pack("z", "hello")
+      local result = string.unpack("z", s)
+      return result
+    ''');
+    ls.call(0, 1);
+    expect(ls.toStr(-1), equals('hello'));
+  });
+
+  test('string.packsize', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'''
+      return string.packsize("i4i4"), string.packsize("Bd"), string.packsize("j")
+    ''');
+    ls.call(0, 3);
+    expect(ls.toInteger(-3), equals(8));
+    expect(ls.toInteger(-2), equals(9));
+    expect(ls.toInteger(-1), equals(8));
+  });
+
+  test('string.pack big endian', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'''
+      local s = string.pack(">i2", 256)
+      local a, b = string.byte(s, 1, 2)
+      return a, b
+    ''');
+    ls.call(0, 2);
+    expect(ls.toInteger(-2), equals(1));  // high byte
+    expect(ls.toInteger(-1), equals(0));  // low byte
+  });
+
   test('lua table standard library test', () {
     expect(testString(), true);
   });

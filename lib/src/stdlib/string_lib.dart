@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:sprintf/sprintf.dart';
 
 import '../api/lua_state.dart';
@@ -190,28 +193,292 @@ class StringLib {
 
 /* PACK/UNPACK */
 
+  /// Returns the byte size for a pack format option.
+  /// [opt] is the format char, [n] is the optional size argument.
+  static int _packOptSize(String opt, int n) {
+    switch (opt) {
+      case 'b': case 'B': return 1;
+      case 'h': case 'H': return 2;
+      case 'i': case 'I': return n;
+      case 'l': case 'L': return 8;
+      case 'j': case 'J': return 8;
+      case 'f': return 4;
+      case 'd': case 'n': return 8;
+      default: return 0;
+    }
+  }
+
+  /// Parse a pack format string into a list of (option, size) pairs.
+  /// Also handles endianness markers. Returns list of maps with keys:
+  /// 'opt' (String), 'size' (int), 'endian' (Endian).
+  static List<Map<String, dynamic>> _parseFmt(String fmt) {
+    var result = <Map<String, dynamic>>[];
+    var endian = Endian.little; // Lua default is native; we default little.
+    var i = 0;
+    while (i < fmt.length) {
+      var c = fmt[i];
+      switch (c) {
+        case '<': endian = Endian.little; i++; break;
+        case '>': case '!': endian = Endian.big; i++; break;
+        case '=': endian = Endian.host; i++; break;
+        case ' ': i++; break;
+        case 'b': case 'B':
+        case 'h': case 'H':
+        case 'l': case 'L':
+        case 'j': case 'J':
+        case 'f': case 'd': case 'n':
+          result.add({'opt': c, 'size': _packOptSize(c, 0), 'endian': endian});
+          i++;
+          break;
+        case 'i': case 'I':
+          i++;
+          var n = 4; // default int size
+          if (i < fmt.length && fmt[i].codeUnitAt(0) >= 49 /* '1' */ &&
+              fmt[i].codeUnitAt(0) <= 57 /* '9' */) {
+            n = int.parse(fmt[i]);
+            i++;
+          }
+          result.add({'opt': c, 'size': n, 'endian': endian});
+          break;
+        case 's':
+          i++;
+          var n = 8; // default size_t length prefix size
+          if (i < fmt.length && fmt[i].codeUnitAt(0) >= 49 &&
+              fmt[i].codeUnitAt(0) <= 57) {
+            n = int.parse(fmt[i]);
+            i++;
+          }
+          result.add({'opt': 's', 'size': n, 'endian': endian});
+          break;
+        case 'z':
+          result.add({'opt': 'z', 'size': 0, 'endian': endian});
+          i++;
+          break;
+        case 'x':
+          result.add({'opt': 'x', 'size': 1, 'endian': endian});
+          i++;
+          break;
+        default:
+          i++;
+          break;
+      }
+    }
+    return result;
+  }
+
+  static void _packWriteInt(ByteData bd, int offset, int size, int value, Endian endian) {
+    switch (size) {
+      case 1: bd.setInt8(offset, value); break;
+      case 2: bd.setInt16(offset, value, endian); break;
+      case 4: bd.setInt32(offset, value, endian); break;
+      case 8: bd.setInt64(offset, value, endian); break;
+    }
+  }
+
+  static void _packWriteUint(ByteData bd, int offset, int size, int value, Endian endian) {
+    switch (size) {
+      case 1: bd.setUint8(offset, value); break;
+      case 2: bd.setUint16(offset, value, endian); break;
+      case 4: bd.setUint32(offset, value, endian); break;
+      case 8: bd.setUint64(offset, value, endian); break;
+    }
+  }
+
+  static int _packReadInt(ByteData bd, int offset, int size, Endian endian) {
+    switch (size) {
+      case 1: return bd.getInt8(offset);
+      case 2: return bd.getInt16(offset, endian);
+      case 4: return bd.getInt32(offset, endian);
+      case 8: return bd.getInt64(offset, endian);
+      default: return 0;
+    }
+  }
+
+  static int _packReadUint(ByteData bd, int offset, int size, Endian endian) {
+    switch (size) {
+      case 1: return bd.getUint8(offset);
+      case 2: return bd.getUint16(offset, endian);
+      case 4: return bd.getUint32(offset, endian);
+      case 8: return bd.getUint64(offset, endian);
+      default: return 0;
+    }
+  }
+
 // string.packsize (fmt)
 // http://www.lua.org/manual/5.3/manual.html#pdf-string.packsize
   static int _strPackSize(LuaState ls) {
-    var fmt = ls.checkString(1);
-    if (fmt == "j") {
-      ls.pushInteger(8); // todo
-    } else {
-      throw Exception("todo: strPackSize!");
+    var fmt = ls.checkString(1)!;
+    var ops = _parseFmt(fmt);
+    var size = 0;
+    for (var op in ops) {
+      String opt = op['opt'];
+      switch (opt) {
+        case 'b': case 'B': case 'h': case 'H':
+        case 'i': case 'I': case 'l': case 'L':
+        case 'j': case 'J': case 'f': case 'd':
+        case 'n': case 'x':
+          size += op['size'] as int;
+          break;
+        case 's': case 'z':
+          throw Exception("variable-size format '$opt' in packsize");
+      }
     }
+    ls.pushInteger(size);
     return 1;
   }
 
 // string.pack (fmt, v1, v2, ···)
 // http://www.lua.org/manual/5.3/manual.html#pdf-string.pack
   static int _strPack(LuaState ls) {
-    throw Exception("todo: strPack!");
+    var fmt = ls.checkString(1)!;
+    var ops = _parseFmt(fmt);
+
+    // First pass: compute total size
+    var argIdx = 2;
+    var totalSize = 0;
+    for (var op in ops) {
+      String opt = op['opt'];
+      int sz = op['size'];
+      switch (opt) {
+        case 'b': case 'B': case 'h': case 'H':
+        case 'i': case 'I': case 'l': case 'L':
+        case 'j': case 'J': case 'f': case 'd': case 'n':
+          totalSize += sz;
+          argIdx++;
+          break;
+        case 's':
+          var str = ls.checkString(argIdx)!;
+          totalSize += sz + utf8.encode(str).length;
+          argIdx++;
+          break;
+        case 'z':
+          var str = ls.checkString(argIdx)!;
+          totalSize += utf8.encode(str).length + 1;
+          argIdx++;
+          break;
+        case 'x':
+          totalSize += 1;
+          break;
+      }
+    }
+
+    // Second pass: write
+    var buf = Uint8List(totalSize);
+    var bd = ByteData.view(buf.buffer);
+    var offset = 0;
+    argIdx = 2;
+    for (var op in ops) {
+      String opt = op['opt'];
+      int sz = op['size'];
+      Endian endian = op['endian'];
+      switch (opt) {
+        case 'b': case 'h': case 'i': case 'l': case 'j':
+          _packWriteInt(bd, offset, sz, ls.checkInteger(argIdx)!, endian);
+          offset += sz;
+          argIdx++;
+          break;
+        case 'B': case 'H': case 'I': case 'L': case 'J':
+          _packWriteUint(bd, offset, sz, ls.checkInteger(argIdx)!, endian);
+          offset += sz;
+          argIdx++;
+          break;
+        case 'f':
+          bd.setFloat32(offset, ls.checkNumber(argIdx)!, endian);
+          offset += 4;
+          argIdx++;
+          break;
+        case 'd': case 'n':
+          bd.setFloat64(offset, ls.checkNumber(argIdx)!, endian);
+          offset += 8;
+          argIdx++;
+          break;
+        case 's':
+          var strBytes = utf8.encode(ls.checkString(argIdx)!);
+          _packWriteUint(bd, offset, sz, strBytes.length, endian);
+          offset += sz;
+          buf.setRange(offset, offset + strBytes.length, strBytes);
+          offset += strBytes.length;
+          argIdx++;
+          break;
+        case 'z':
+          var strBytes = utf8.encode(ls.checkString(argIdx)!);
+          buf.setRange(offset, offset + strBytes.length, strBytes);
+          offset += strBytes.length;
+          buf[offset] = 0;
+          offset++;
+          argIdx++;
+          break;
+        case 'x':
+          buf[offset] = 0;
+          offset++;
+          break;
+      }
+    }
+
+    ls.pushString(String.fromCharCodes(buf));
+    return 1;
   }
 
 // string.unpack (fmt, s [, pos])
 // http://www.lua.org/manual/5.3/manual.html#pdf-string.unpack
   static int _strUnpack(LuaState ls) {
-    throw Exception("todo: strUnpack!");
+    var fmt = ls.checkString(1)!;
+    var s = ls.checkString(2)!;
+    var pos = ls.optInteger(3, 1)! - 1; // convert 1-based to 0-based
+    var ops = _parseFmt(fmt);
+    var bytes = Uint8List.fromList(s.codeUnits);
+    var bd = ByteData.view(bytes.buffer);
+    var offset = pos;
+    var nResults = 0;
+
+    for (var op in ops) {
+      String opt = op['opt'];
+      int sz = op['size'];
+      Endian endian = op['endian'];
+      switch (opt) {
+        case 'b': case 'h': case 'i': case 'l': case 'j':
+          ls.pushInteger(_packReadInt(bd, offset, sz, endian));
+          offset += sz;
+          nResults++;
+          break;
+        case 'B': case 'H': case 'I': case 'L': case 'J':
+          ls.pushInteger(_packReadUint(bd, offset, sz, endian));
+          offset += sz;
+          nResults++;
+          break;
+        case 'f':
+          ls.pushNumber(bd.getFloat32(offset, endian));
+          offset += 4;
+          nResults++;
+          break;
+        case 'd': case 'n':
+          ls.pushNumber(bd.getFloat64(offset, endian));
+          offset += 8;
+          nResults++;
+          break;
+        case 's':
+          var len = _packReadUint(bd, offset, sz, endian);
+          offset += sz;
+          ls.pushString(utf8.decode(bytes.sublist(offset, offset + len)));
+          offset += len;
+          nResults++;
+          break;
+        case 'z':
+          var end = offset;
+          while (end < bytes.length && bytes[end] != 0) end++;
+          ls.pushString(utf8.decode(bytes.sublist(offset, end)));
+          offset = end + 1; // skip null terminator
+          nResults++;
+          break;
+        case 'x':
+          offset++;
+          break;
+      }
+    }
+
+    // Lua's string.unpack also returns the position after the last read item
+    ls.pushInteger(offset + 1); // back to 1-based
+    return nResults + 1;
   }
 
 /* STRING FORMAT */
