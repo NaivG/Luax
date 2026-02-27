@@ -19,6 +19,30 @@ void main() {
     expect(ls.toBoolean(-1), equals(true));
   });
 
+  test('math.abs positive integer', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return math.abs(5)');
+    ls.call(0, 1);
+    expect(ls.toInteger(-1), equals(5));
+  });
+
+  test('math.abs negative integer', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return math.abs(-5)');
+    ls.call(0, 1);
+    expect(ls.toInteger(-1), equals(5));
+  });
+
+  test('math.abs zero', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return math.abs(0)');
+    ls.call(0, 1);
+    expect(ls.toInteger(-1), equals(0));
+  });
+
   group('Math Library Tests', () {
     late LuaState lua;
 

@@ -249,10 +249,8 @@ class MathLib{
 
   static int _abs(LuaState ls){
     if (ls.isInteger(1)){
-      var x = ls.toInteger(1);
-      if (x < 0) {
-        ls.pushInteger(-x);
-      }
+      var x = ls.toInteger(1)!;
+      ls.pushInteger(x < 0 ? -x : x);
     } else {
       var x = ls.checkNumber(1)!;
       ls.pushNumber(x.abs());
