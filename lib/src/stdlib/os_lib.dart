@@ -94,7 +94,7 @@ class OSLib {
     var format = ls.optString(1, "%c")!;
     DateTime t;
     if (ls.isInteger(2)) {
-      t = DateTime.now().add(Duration(seconds: ls.toInteger(2)));
+      t = DateTime.fromMillisecondsSinceEpoch(ls.toInteger(2)! * 1000);
     } else {
       t = DateTime.now();
     }

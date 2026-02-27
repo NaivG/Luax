@@ -63,6 +63,24 @@ void main() {
     expect(result, isNot(equals('%A')));
   });
 
+  test('os.date with explicit epoch time', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    // 0 epoch = Jan 1 1970 UTC
+    ls.loadString(r'return os.date("!%Y-%m-%d", 0)');
+    ls.call(0, 1);
+    expect(ls.toStr(-1), equals('1970-01-01'));
+  });
+
+  test('os.date with known epoch time', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    // 1000000000 = 2001-09-09 UTC
+    ls.loadString(r'return os.date("!%Y-%m-%d", 1000000000)');
+    ls.call(0, 1);
+    expect(ls.toStr(-1), equals('2001-09-09'));
+  });
+
   test('lua OS standard library test', () {
     expect(testOS(), true);
   });
