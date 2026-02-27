@@ -5,6 +5,9 @@ import 'package:sprintf/sprintf.dart';
 
 import '../api/lua_state.dart';
 import '../api/lua_type.dart';
+import '../binchunk/binary_chunk.dart';
+import '../state/closure.dart';
+import '../state/lua_state_impl.dart';
 
 class StringLib {
   static final tagPattern =
@@ -188,7 +191,20 @@ class StringLib {
 // http://www.lua.org/manual/5.3/manual.html#pdf-string.dump
 // lua-5.3.4/src/lstrlib.c#str_dump()
   static int _strDump(LuaState ls) {
-    throw Exception("todo: strDump!");
+    // Arg 1 must be a Lua function.
+    ls.checkType(1, LuaType.luaFunction);
+    var strip = ls.toBoolean(2);
+
+    // Access the closure from the internal stack.
+    var impl = ls as LuaStateImpl;
+    var val = impl.getRawValue(1);
+    if (val is! Closure || val.proto == null) {
+      throw Exception("unable to dump given function");
+    }
+
+    var bytes = BinaryChunk.dump(val.proto!, strip: strip);
+    ls.pushString(String.fromCharCodes(bytes));
+    return 1;
   }
 
 /* PACK/UNPACK */

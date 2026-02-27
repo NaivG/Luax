@@ -314,6 +314,32 @@ void main() {
     expect(ls.toInteger(-1), equals(8));
   });
 
+  test('string.dump and load roundtrip', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'''
+      local function add(a, b) return a + b end
+      local dumped = string.dump(add)
+      local restored = load(dumped)
+      return restored(3, 4)
+    ''');
+    ls.call(0, 1);
+    expect(ls.toInteger(-1), equals(7));
+  });
+
+  test('string.dump with strip option', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'''
+      local function mul(a, b) return a * b end
+      local dumped = string.dump(mul, true)
+      local restored = load(dumped)
+      return restored(5, 6)
+    ''');
+    ls.call(0, 1);
+    expect(ls.toInteger(-1), equals(30));
+  });
+
   test('string.pack big endian', () {
     LuaState ls = LuaState.newState();
     ls.openLibs();

@@ -141,6 +141,12 @@ class LuaStateImpl implements LuaState, LuaVM {
   //******************* LuaState *********************
   //**************************************************
 
+  /// Get the raw Dart object at [idx] on the Lua stack.
+  /// Used internally by stdlib for operations that need the underlying value.
+  Object? getRawValue(int idx) {
+    return _stack!.get(idx);
+  }
+
   @override
   int absIndex(int idx) {
     return _stack!.absIndex(idx);

@@ -179,7 +179,19 @@ class BasicLib {
     if (chunk != null) {
       /* loading a string? */
       var chunkName = ls.optString(2, chunk);
-      ThreadStatus status = ls.load(Uint8List.fromList(utf8.encode(chunk)), chunkName!, mode);
+      // For binary chunks (from string.dump), use raw code units to avoid
+      // UTF-8 encoding corruption of arbitrary bytes.
+      Uint8List bytes;
+      if (chunk.length >= 4 &&
+          chunk.codeUnitAt(0) == 0x1B &&
+          chunk.codeUnitAt(1) == 0x4C &&
+          chunk.codeUnitAt(2) == 0x75 &&
+          chunk.codeUnitAt(3) == 0x61) {
+        bytes = Uint8List.fromList(chunk.codeUnits);
+      } else {
+        bytes = Uint8List.fromList(utf8.encode(chunk));
+      }
+      ThreadStatus status = ls.load(bytes, chunkName!, mode);
       return loadAux(ls, status, env);
     } else {
       /* loading from a reader function */

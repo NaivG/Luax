@@ -286,4 +286,122 @@ class BinaryChunk {
     }
     return true;
   }
+
+  /// Serialize a Prototype to Lua 5.3 binary chunk format.
+  static Uint8List dump(Prototype proto, {bool strip = false}) {
+    var w = ByteDataWriter(endian: Endian.little);
+    // Header
+    w.write(Uint8List.fromList(luaSignature));
+    w.writeUint8(luacVersion);
+    w.writeUint8(luacFormat);
+    w.write(Uint8List.fromList(luacData));
+    w.writeUint8(cintSize);
+    w.writeUint8(csizetSize);
+    w.writeUint8(instructionSize);
+    w.writeUint8(luaIntegerSize);
+    w.writeUint8(luaNumberSize);
+    w.writeInt64(luacInt, Endian.little);
+    w.writeFloat64(luacNum, Endian.little);
+    // size_upvalues
+    w.writeUint8(proto.upvalues.length);
+    // Prototype
+    _dumpProto(w, proto, strip);
+    return w.toBytes();
+  }
+
+  static void _dumpProto(ByteDataWriter w, Prototype proto, bool strip) {
+    _putLuaString(w, strip ? '' : (proto.source ?? ''));
+    w.writeUint32(proto.lineDefined ?? 0, Endian.little);
+    w.writeUint32(proto.lastLineDefined ?? 0, Endian.little);
+    w.writeUint8(proto.numParams ?? 0);
+    w.writeUint8(proto.isVararg ?? 0);
+    w.writeUint8(proto.maxStackSize);
+
+    // Instructions
+    w.writeUint32(proto.code.length, Endian.little);
+    for (var i = 0; i < proto.code.length; i++) {
+      w.writeUint32(proto.code[i], Endian.little);
+    }
+
+    // Constants
+    w.writeUint32(proto.constants.length, Endian.little);
+    for (var c in proto.constants) {
+      if (c == null) {
+        w.writeUint8(tag_nil);
+      } else if (c is bool) {
+        w.writeUint8(tag_boolean);
+        w.writeUint8(c ? 1 : 0);
+      } else if (c is int) {
+        w.writeUint8(tag_integer);
+        w.writeInt64(c, Endian.little);
+      } else if (c is double) {
+        w.writeUint8(tag_number);
+        w.writeFloat64(c, Endian.little);
+      } else if (c is String) {
+        w.writeUint8(c.length < 253 ? tag_short_str : tag_long_str);
+        _putLuaString(w, c);
+      }
+    }
+
+    // Upvalues
+    w.writeUint32(proto.upvalues.length, Endian.little);
+    for (var uv in proto.upvalues) {
+      w.writeUint8(uv?.instack ?? 0);
+      w.writeUint8(uv?.idx ?? 0);
+    }
+
+    // Sub-prototypes
+    w.writeUint32(proto.protos.length, Endian.little);
+    for (var p in proto.protos) {
+      _dumpProto(w, p!, strip);
+    }
+
+    // Line info
+    if (strip) {
+      w.writeUint32(0, Endian.little);
+    } else {
+      w.writeUint32(proto.lineInfo.length, Endian.little);
+      for (var i = 0; i < proto.lineInfo.length; i++) {
+        w.writeUint32(proto.lineInfo[i], Endian.little);
+      }
+    }
+
+    // Local variables
+    if (strip) {
+      w.writeUint32(0, Endian.little);
+    } else {
+      w.writeUint32(proto.locVars.length, Endian.little);
+      for (var lv in proto.locVars) {
+        _putLuaString(w, lv?.varName ?? '');
+        w.writeUint32(lv?.startPC ?? 0, Endian.little);
+        w.writeUint32(lv?.endPC ?? 0, Endian.little);
+      }
+    }
+
+    // Upvalue names
+    if (strip) {
+      w.writeUint32(0, Endian.little);
+    } else {
+      w.writeUint32(proto.upvalueNames.length, Endian.little);
+      for (var name in proto.upvalueNames) {
+        _putLuaString(w, name ?? '');
+      }
+    }
+  }
+
+  static void _putLuaString(ByteDataWriter w, String s) {
+    if (s.isEmpty) {
+      w.writeUint8(0);
+      return;
+    }
+    var bytes = utf8.encode(s);
+    var size = bytes.length + 1; // Lua adds 1 to the stored size
+    if (size < 0xFF) {
+      w.writeUint8(size);
+    } else {
+      w.writeUint8(0xFF);
+      w.writeUint64(size, Endian.little);
+    }
+    w.write(Uint8List.fromList(bytes));
+  }
 }
