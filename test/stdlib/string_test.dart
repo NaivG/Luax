@@ -93,6 +93,38 @@ void main() {
     expect(ls.toInteger(-1), equals(11));
   });
 
+  test('string.format %e', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return string.format("%e", 314.0)');
+    ls.call(0, 1);
+    expect(ls.toStr(-1), contains('14'));
+  });
+
+  test('string.format %g', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return string.format("%g", 3.14)');
+    ls.call(0, 1);
+    expect(ls.toStr(-1), equals('3.14'));
+  });
+
+  test('string.format %E', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return string.format("%E", 314.0)');
+    ls.call(0, 1);
+    expect(ls.toStr(-1), contains('14'));
+  });
+
+  test('string.format %G', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return string.format("%G", 3.14)');
+    ls.call(0, 1);
+    expect(ls.toStr(-1), equals('3.14'));
+  });
+
   test('lua table standard library test', () {
     expect(testString(), true);
   });

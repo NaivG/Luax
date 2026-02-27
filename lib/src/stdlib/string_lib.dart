@@ -291,6 +291,10 @@ class StringLib {
       case 'X': // hex integer
         return sprintf(tag, [ls.toInteger(argIdx)]);
       case 'f': // float
+      case 'e':
+      case 'E': // scientific notation
+      case 'g':
+      case 'G': // general float
         return sprintf(tag, [ls.toNumber(argIdx)]);
       case 's':
       case 'q': // string
