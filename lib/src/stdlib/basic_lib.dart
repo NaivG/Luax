@@ -220,7 +220,7 @@ class BasicLib {
 // lua-5.3.4/src/lbaselib.c#luaB_loadfile()
   static int _baseLoadFile(LuaState ls) {
     String? fname = ls.optString(1, "");
-    String? mode = ls.optString(1, "bt");
+    String? mode = ls.optString(2, "bt");
     int env = !ls.isNone(3) ? 3 : 0; /* 'env' index or 0 if no 'env' */
     ThreadStatus status = ls.loadFileX(fname, mode);
     return loadAux(ls, status, env);
@@ -230,7 +230,7 @@ class BasicLib {
 // http://www.lua.org/manual/5.3/manual.html#pdf-dofile
 // lua-5.3.4/src/lbaselib.c#luaB_dofile()
   static int _baseDoFile(LuaState ls) {
-    String? fname = ls.optString(1, "bt");
+    String? fname = ls.optString(1, "");
     ls.setTop(1);
     if (ls.loadFile(fname) != ThreadStatus.luaOk) {
       return ls.error();
