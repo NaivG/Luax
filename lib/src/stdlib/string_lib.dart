@@ -564,7 +564,11 @@ class StringLib {
 
       if (c == '-' && !inBracket && i > 0 && i + 1 < len) {
         final prev = pat[i - 1];
-        if (prev != '*' && prev != '+' && prev != '?' && prev != '-') {
+        // In Lua, `-` is a non-greedy quantifier only after a character class
+        // item (letter, digit, `.`, `]`, or a `%x` escape).  After grouping
+        // parens or other quantifiers it is a literal dash.
+        if (prev != '*' && prev != '+' && prev != '?' && prev != '-' &&
+            prev != '(' && prev != ')') {
           buf.write('*?');
           i++;
           continue;
