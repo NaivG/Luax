@@ -240,7 +240,47 @@ class BasicLib {
 // xpcall (f, msgh [, arg1, ···])
 // http://www.lua.org/manual/5.3/manual.html#pdf-xpcall
   static int _baseXPCall(LuaState ls) {
-    throw Exception("todo!");
+    // xpcall(f, msgh [, arg1, ...])
+    // Stack: f(1), msgh(2), arg1(3), ...
+    int nArgs = ls.getTop() - 2; // everything after f and msgh
+
+    // Move msgh to a safe position: swap it below f
+    // Stack manipulation: push f, push args, call via pCall
+    ls.pushValue(1); // push f
+    for (int i = 3; i <= nArgs + 2; i++) {
+      ls.pushValue(i); // push each arg
+    }
+
+    ThreadStatus status = ls.pCall(nArgs, -1, 0);
+
+    if (status == ThreadStatus.luaOk) {
+      // Success: stack has return values at top (above our original args)
+      ls.pushBoolean(true);
+      ls.insert(nArgs + 3); // insert true before results
+      return ls.getTop() - nArgs - 2; // true + results
+    } else {
+      // Error: top of stack has error message
+      var errMsg = ls.toStr(-1) ?? ls.toStr(-1) ?? 'error';
+      ls.pop(1); // pop error message
+
+      // Call the message handler: msgh(err)
+      ls.pushValue(2); // push msgh
+      ls.pushString(errMsg); // push error
+      ThreadStatus handlerStatus = ls.pCall(1, 1, 0);
+
+      if (handlerStatus == ThreadStatus.luaOk) {
+        // Handler returned a value; stack: ..., handler_result
+        ls.pushBoolean(false);
+        ls.insert(-2); // false, handler_result
+        return 2;
+      } else {
+        // Handler itself errored; return false + original error
+        ls.pop(1); // pop handler error
+        ls.pushBoolean(false);
+        ls.pushString(errMsg);
+        return 2;
+      }
+    }
   }
 
 // getmetatable (object)

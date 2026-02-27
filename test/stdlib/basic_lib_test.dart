@@ -26,6 +26,38 @@ void main() {
     expect(ls.toInteger(-1), equals(255));
   });
 
+  test('xpcall catches error and calls handler', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'''
+      local ok, msg = xpcall(function()
+        error("boom")
+      end, function(err)
+        return "caught: " .. err
+      end)
+      return ok, msg
+    ''');
+    ls.call(0, 2);
+    expect(ls.toBoolean(-2), equals(false));
+    expect(ls.toStr(-1), contains('caught:'));
+  });
+
+  test('xpcall success passes through return values', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'''
+      local ok, val = xpcall(function()
+        return 42
+      end, function(err)
+        return "handler"
+      end)
+      return ok, val
+    ''');
+    ls.call(0, 2);
+    expect(ls.toBoolean(-2), equals(true));
+    expect(ls.toInteger(-1), equals(42));
+  });
+
   group('Basic Library Tests', () {
     late LuaState lua;
 
