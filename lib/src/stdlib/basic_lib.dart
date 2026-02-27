@@ -271,25 +271,21 @@ class BasicLib {
       ls.insert(nArgs + 3); // insert true before results
       return ls.getTop() - nArgs - 2; // true + results
     } else {
-      // Error: top of stack has error message
-      var errMsg = ls.toStr(-1) ?? ls.toStr(-1) ?? 'error';
-      ls.pop(1); // pop error message
-
-      // Call the message handler: msgh(err)
+      // Error: top of stack has the raw error value (table, number, string, etc.)
+      // Pass it directly to the message handler.
       ls.pushValue(2); // push msgh
-      ls.pushString(errMsg); // push error
+      ls.pushValue(-2); // push the raw error value (it's below msgh now)
+      ls.remove(-3); // remove original error from below
       ThreadStatus handlerStatus = ls.pCall(1, 1, 0);
 
       if (handlerStatus == ThreadStatus.luaOk) {
-        // Handler returned a value; stack: ..., handler_result
         ls.pushBoolean(false);
         ls.insert(-2); // false, handler_result
         return 2;
       } else {
-        // Handler itself errored; return false + original error
-        ls.pop(1); // pop handler error
+        // Handler itself errored
         ls.pushBoolean(false);
-        ls.pushString(errMsg);
+        ls.insert(-2); // false, handler_error
         return 2;
       }
     }

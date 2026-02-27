@@ -28,6 +28,7 @@ import 'lua_stack.dart';
 import 'lua_table.dart';
 import 'lua_value.dart';
 import 'closure.dart';
+import 'lua_error.dart';
 import 'upvalue_holder.dart';
 
 /// Global thread ID counter
@@ -762,7 +763,11 @@ class LuaStateImpl implements LuaState, LuaVM {
       while (_stack != caller) {
         _popLuaStack();
       }
-      _stack!.push("$e");
+      if (e is LuaError) {
+        _stack!.push(e.value);
+      } else {
+        _stack!.push("$e");
+      }
       return ThreadStatus.luaErrRun;
     }
   }
@@ -952,8 +957,12 @@ class LuaStateImpl implements LuaState, LuaVM {
   @override
   int error() {
     Object? err = _stack!.pop();
-    // Fix #33: Include line number in error message
-    throw Exception(_stack!.formatError(err.toString()));
+    if (err is String) {
+      // String errors get line info appended (Fix #33).
+      throw LuaError(_stack!.formatError(err));
+    }
+    // Non-string errors (tables, numbers, etc.) are preserved as-is.
+    throw LuaError(err);
   }
 
   /// Fix #33: Public method to format error messages with line numbers
@@ -975,7 +984,12 @@ class LuaStateImpl implements LuaState, LuaVM {
       while (_stack != caller) {
         _popLuaStack();
       }
-      _stack!.push("$e"); // TODO
+      // Preserve raw Lua error values (tables, numbers, etc.)
+      if (e is LuaError) {
+        _stack!.push(e.value);
+      } else {
+        _stack!.push("$e");
+      }
       return ThreadStatus.luaErrRun;
     }
   }

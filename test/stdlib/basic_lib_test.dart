@@ -26,6 +26,38 @@ void main() {
     expect(ls.toInteger(-1), equals(255));
   });
 
+  test('xpcall passes raw error object to handler', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'''
+      local ok, msg = xpcall(function()
+        error({code=404, msg="not found"})
+      end, function(err)
+        return err.code
+      end)
+      return ok, msg
+    ''');
+    ls.call(0, 2);
+    expect(ls.toBoolean(-2), equals(false));
+    expect(ls.toInteger(-1), equals(404));
+  });
+
+  test('xpcall passes numeric error to handler', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'''
+      local ok, msg = xpcall(function()
+        error(42)
+      end, function(err)
+        return err + 1
+      end)
+      return ok, msg
+    ''');
+    ls.call(0, 2);
+    expect(ls.toBoolean(-2), equals(false));
+    expect(ls.toInteger(-1), equals(43));
+  });
+
   test('xpcall catches error and calls handler', () {
     LuaState ls = LuaState.newState();
     ls.openLibs();
