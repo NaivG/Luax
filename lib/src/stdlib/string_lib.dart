@@ -338,12 +338,22 @@ class StringLib {
     }
 
     int start;
+    int matchLen;
     if (plain) {
       start = tail.indexOf(pattern);
+      matchLen = pattern.length;
     } else {
-      start = tail.indexOf(RegExp(luaPatternToRegex(pattern)));
+      var regex = RegExp(luaPatternToRegex(pattern));
+      var m = regex.firstMatch(tail);
+      if (m != null) {
+        start = m.start;
+        matchLen = m.group(0)!.length;
+      } else {
+        start = -1;
+        matchLen = 0;
+      }
     }
-    var end = start + pattern.length - 1;
+    var end = start + matchLen - 1;
 
     if (start >= 0) {
       start += s.length - tail.length + 1;

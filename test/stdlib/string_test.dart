@@ -66,6 +66,33 @@ void main() {
     expect(ls.toStr(-1), equals(''));
   });
 
+  test('string.find end pos: pattern length != match length', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return string.find("ab12cd", "%d%d")');
+    ls.call(0, 2);
+    expect(ls.toInteger(-2), equals(3));
+    expect(ls.toInteger(-1), equals(4));
+  });
+
+  test('string.find returns correct end position with pattern', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return string.find("abc123def", "%d+")');
+    ls.call(0, 2);
+    expect(ls.toInteger(-2), equals(4));
+    expect(ls.toInteger(-1), equals(6));
+  });
+
+  test('string.find returns correct end position with plain search', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return string.find("hello world", "world", 1, true)');
+    ls.call(0, 2);
+    expect(ls.toInteger(-2), equals(7));
+    expect(ls.toInteger(-1), equals(11));
+  });
+
   test('lua table standard library test', () {
     expect(testString(), true);
   });
