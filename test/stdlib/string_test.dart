@@ -220,6 +220,33 @@ void main() {
     expect(ls.toStr(-2), equals('bac'));
   });
 
+  test('string.find empty pattern', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return string.find("hello", "", 1, true)');
+    ls.call(0, 2);
+    expect(ls.toInteger(-2), equals(1));
+    expect(ls.toInteger(-1), equals(0));
+  });
+
+  test('string.find empty pattern with init > 1', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return string.find("hello", "", 3, true)');
+    ls.call(0, 2);
+    expect(ls.toInteger(-2), equals(3));
+    expect(ls.toInteger(-1), equals(2));
+  });
+
+  test('string.find plain with init > 1', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return string.find("hello world", "world", 5, true)');
+    ls.call(0, 2);
+    expect(ls.toInteger(-2), equals(7));
+    expect(ls.toInteger(-1), equals(11));
+  });
+
   test('string.format %q basic', () {
     LuaState ls = LuaState.newState();
     ls.openLibs();
