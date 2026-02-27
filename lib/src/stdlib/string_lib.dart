@@ -729,16 +729,75 @@ class StringLib {
 // string.gsub (s, pattern, repl [, n])
 // http://www.lua.org/manual/5.3/manual.html#pdf-string.gsub
   static int _strGsub(LuaState ls) {
-    var s = ls.checkString(1);
+    var s = ls.checkString(1)!;
     var pattern = ls.checkString(2)!;
-    var repl = ls.checkString(3); // todo
+    // repl can be string, function, or table (arg 3)
+    var replType = ls.type(3);
     var n = ls.optInteger(4, -1)!;
 
-    var r = gsub(s, pattern, repl, n);
-    var newStr = r[0];
-    var nMatches = r[1];
-    ls.pushString(newStr);
-    ls.pushInteger(nMatches);
+    if (replType == LuaType.luaString) {
+      var repl = ls.checkString(3);
+      var r = gsub(s, pattern, repl, n);
+      ls.pushString(r[0]);
+      ls.pushInteger(r[1]);
+      return 2;
+    }
+
+    // Function or table replacement: iterate matches manually.
+    var regex = RegExp(luaPatternToRegex(pattern));
+    var buf = StringBuffer();
+    var count = 0;
+    var lastEnd = 0;
+
+    for (var m in regex.allMatches(s)) {
+      if (n >= 0 && count >= n) break;
+      count++;
+
+      buf.write(s.substring(lastEnd, m.start));
+
+      // Determine the key to query: first capture group, or whole match.
+      String key = (m.groupCount > 0) ? (m.group(1) ?? '') : m.group(0)!;
+
+      if (replType == LuaType.luaFunction) {
+        ls.pushValue(3); // push the function
+        // Push captures as args (or whole match if no captures)
+        if (m.groupCount > 0) {
+          for (var i = 1; i <= m.groupCount; i++) {
+            ls.pushString(m.group(i));
+          }
+          ls.call(m.groupCount, 1);
+        } else {
+          ls.pushString(m.group(0));
+          ls.call(1, 1);
+        }
+        // If result is false or nil, keep original match
+        if (ls.isNil(-1) || (ls.type(-1) == LuaType.luaBoolean && !ls.toBoolean(-1))) {
+          buf.write(m.group(0)!);
+        } else {
+          buf.write(ls.toStr(-1) ?? m.group(0)!);
+        }
+        ls.pop(1);
+      } else if (replType == LuaType.luaTable) {
+        ls.pushValue(3); // push the table
+        ls.pushString(key);
+        ls.getTable(-2);
+        // If result is false or nil, keep original match
+        if (ls.isNil(-1) || (ls.type(-1) == LuaType.luaBoolean && !ls.toBoolean(-1))) {
+          buf.write(m.group(0)!);
+        } else {
+          buf.write(ls.toStr(-1) ?? m.group(0)!);
+        }
+        ls.pop(2); // pop result and table
+      } else {
+        return ls.error2("string/function/table expected");
+      }
+
+      lastEnd = m.end;
+    }
+
+    buf.write(s.substring(lastEnd));
+    ls.pushString(buf.toString());
+    ls.pushInteger(count);
     return 2;
   }
 

@@ -220,6 +220,43 @@ void main() {
     expect(ls.toStr(-2), equals('bac'));
   });
 
+  test('string.gsub with function replacement', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'''
+      return string.gsub("hello world", "%w+", function(w)
+        return w:upper()
+      end)
+    ''');
+    ls.call(0, 2);
+    expect(ls.toStr(-2), equals('HELLO WORLD'));
+    expect(ls.toInteger(-1), equals(2));
+  });
+
+  test('string.gsub with table replacement', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'''
+      local t = {hello="HI", world="EARTH"}
+      return string.gsub("hello world", "%w+", t)
+    ''');
+    ls.call(0, 2);
+    expect(ls.toStr(-2), equals('HI EARTH'));
+    expect(ls.toInteger(-1), equals(2));
+  });
+
+  test('string.gsub function returns nil keeps match', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'''
+      return string.gsub("abc", "(%w)", function(w)
+        if w == "b" then return w:upper() end
+      end)
+    ''');
+    ls.call(0, 2);
+    expect(ls.toStr(-2), equals('aBc'));
+  });
+
   test('string.gsub %0 refers to whole match', () {
     LuaState ls = LuaState.newState();
     ls.openLibs();
