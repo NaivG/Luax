@@ -1,4 +1,8 @@
+import 'dart:math' as math;
+
 class LuaNumber {
+  static double _pow2(int exp) => math.pow(2.0, exp).toDouble();
+
 
   static bool isInteger(double f) {
     return f == f.toInt();
@@ -40,11 +44,8 @@ class LuaNumber {
           mantissa = int.parse(mantissaStr, radix: 16).toDouble();
         }
         var exp = int.parse(expStr);
-        if (exp >= 0) {
-          return mantissa * (1 << exp);
-        } else {
-          return mantissa / (1 << -exp);
-        }
+        // Use dart:math pow to avoid integer overflow on large exponents.
+        return mantissa * _pow2(exp);
       }
       return null;
     }

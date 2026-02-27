@@ -244,6 +244,24 @@ void main() {
     expect(ls.toNumber(-1), equals(0.01));
   });
 
+  test('hex float with large exponent', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    // 0x1p100 should not crash; = 2^100
+    ls.loadString(r'return 0x1p100');
+    ls.call(0, 1);
+    expect(ls.toNumber(-1), equals(1.2676506002282294e+30));
+  });
+
+  test('hex float with large negative exponent', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    // 0x1p-100 should not crash
+    ls.loadString(r'return 0x1p-100');
+    ls.call(0, 1);
+    expect(ls.toNumber(-1), closeTo(7.888609052210118e-31, 1e-40));
+  });
+
   test('hex float with positive exponent', () {
     LuaState ls = LuaState.newState();
     ls.openLibs();
