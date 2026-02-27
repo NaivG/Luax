@@ -43,6 +43,24 @@ void main() {
     expect(ls.toInteger(-1), equals(0));
   });
 
+  test('math.fmod negative dividend', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    // math.fmod(-10, 3) should be -1 (truncation remainder)
+    ls.loadString(r'return math.fmod(-10, 3)');
+    ls.call(0, 1);
+    expect(ls.toNumber(-1), equals(-1));
+  });
+
+  test('math.fmod negative divisor', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    // math.fmod(10, -3) should be 1
+    ls.loadString(r'return math.fmod(10, -3)');
+    ls.call(0, 1);
+    expect(ls.toNumber(-1), equals(1));
+  });
+
   group('Math Library Tests', () {
     late LuaState lua;
 
