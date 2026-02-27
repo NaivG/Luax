@@ -58,6 +58,28 @@ void main() {
     expect(ls.toInteger(-1), equals(42));
   });
 
+  test('luaMaxInteger constant is correct', () {
+    // 1 << 63 - 1 has wrong precedence: 1 << (63-1) = 2^62
+    // Should be (1 << 63) - 1 = 2^63 - 1
+    expect(luaMaxInteger, equals(9223372036854775807));
+  });
+
+  test('math.maxinteger is 2^63 - 1', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return math.maxinteger');
+    ls.call(0, 1);
+    expect(ls.toInteger(-1), equals(9223372036854775807));
+  });
+
+  test('math.mininteger is -2^63', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return math.mininteger');
+    ls.call(0, 1);
+    expect(ls.toInteger(-1), equals(-9223372036854775808));
+  });
+
   group('Basic Library Tests', () {
     late LuaState lua;
 

@@ -10,7 +10,7 @@ const luaRegistryIndex = -luaMaxStack - 1000;
 const luaMultret = -1;
 const luaRidxGlobals = 2;
 
-const luaMaxInteger = 1 << 63 - 1;
+const luaMaxInteger = (1 << 63) - 1;
 const luaMinInteger = -1 << 63;
 
 /// Returns the pseudo-index for an upvalue at the given index (1-based).
