@@ -112,6 +112,22 @@ void main() {
     expect(ls.toInteger(-1), equals(-9223372036854775808));
   });
 
+  test('__call metamethod receives self as first arg', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'''
+      local t = {value = 10}
+      setmetatable(t, {
+        __call = function(self, x)
+          return self.value + x
+        end
+      })
+      return t(5)
+    ''');
+    ls.call(0, 1);
+    expect(ls.toInteger(-1), equals(15));
+  });
+
   group('Basic Library Tests', () {
     late LuaState lua;
 

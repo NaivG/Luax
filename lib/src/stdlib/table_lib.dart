@@ -156,9 +156,9 @@ class TableLib {
       var n = 1; /* number of elements to pop */
       var nL = List<int>.filled(1,0)..[0] = n;
       if (ls.getMetatable(arg) && /* must have metatable */
-          (what & TAB_R != 0 || _checkField(ls, "__index", nL)) &&
-          (what & TAB_W != 0 || _checkField(ls, "__newindex", nL)) &&
-          (what & TAB_L != 0 || _checkField(ls, "__len", nL))) {
+          (what & TAB_R == 0 || _checkField(ls, "__index", nL)) &&
+          (what & TAB_W == 0 || _checkField(ls, "__newindex", nL)) &&
+          (what & TAB_L == 0 || _checkField(ls, "__len", nL))) {
         ls.pop(n); /* pop metatable and tested metamethods */
       } else {
         ls.checkType(arg, LuaType.luaTable); /* force an error */
