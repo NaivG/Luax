@@ -112,6 +112,31 @@ void main() {
     expect(ls.toInteger(-1), equals(-9223372036854775808));
   });
 
+  test('string to number coercion in arithmetic', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return "10" + 5');
+    ls.call(0, 1);
+    expect(ls.toNumber(-1), equals(15.0));
+  });
+
+  test('math.abs coerces string arg to number', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    // math.abs uses checkNumber which calls toNumberX
+    ls.loadString(r'return math.abs("-5")');
+    ls.call(0, 1);
+    expect(ls.toNumber(-1), equals(5.0));
+  });
+
+  test('string to number coercion with float string', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return "3.14" + 0');
+    ls.call(0, 1);
+    expect(ls.toNumber(-1), closeTo(3.14, 0.001));
+  });
+
   test('__call metamethod receives self as first arg', () {
     LuaState ls = LuaState.newState();
     ls.openLibs();

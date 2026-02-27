@@ -334,6 +334,9 @@ class LuaStateImpl implements LuaState, LuaVM {
       return val;
     } else if (val is int) {
       return val.toDouble();
+    } else if (val is String) {
+      // Lua 5.3: lua_tonumberx coerces strings to numbers.
+      return double.tryParse(val) ?? (int.tryParse(val)?.toDouble());
     } else {
       return null;
     }
