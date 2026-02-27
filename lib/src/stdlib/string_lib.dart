@@ -84,16 +84,7 @@ class StringLib {
 // lua-5.3.4/src/lstrlib.c#str_reverse()
   static int _strReverse(LuaState ls) {
     String s = ls.checkString(1)!;
-
-    var strLen = s.length;
-    if (strLen > 1) {
-      var a = [];
-      for (var i = 0; i < strLen; i++) {
-        a[i] = s[strLen - 1 - i];
-      }
-      ls.pushString(a.join());
-    }
-
+    ls.pushString(String.fromCharCodes(s.codeUnits.reversed));
     return 1;
   }
 

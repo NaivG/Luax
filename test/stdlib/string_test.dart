@@ -42,6 +42,30 @@ print(string.match("abc123ABC456", "ABC"))
 }
 
 void main() {
+  test('string.reverse reverses a multi-char string', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return string.reverse("hello")');
+    ls.call(0, 1);
+    expect(ls.toStr(-1), equals('olleh'));
+  });
+
+  test('string.reverse handles single char', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return string.reverse("a")');
+    ls.call(0, 1);
+    expect(ls.toStr(-1), equals('a'));
+  });
+
+  test('string.reverse handles empty string', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return string.reverse("")');
+    ls.call(0, 1);
+    expect(ls.toStr(-1), equals(''));
+  });
+
   test('lua table standard library test', () {
     expect(testString(), true);
   });
