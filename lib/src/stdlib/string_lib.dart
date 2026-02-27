@@ -400,6 +400,16 @@ class StringLib {
 
     var regExpMatch = RegExp(luaPatternToRegex(pattern)).firstMatch(tail!);
     if (regExpMatch == null) return null;
+
+    // If the pattern has capture groups, return those; otherwise return the
+    // full match (group 0).  This matches Lua 5.3 semantics.
+    if (regExpMatch.groupCount > 0) {
+      var captures = <String?>[];
+      for (var i = 1; i <= regExpMatch.groupCount; i++) {
+        captures.add(regExpMatch.group(i));
+      }
+      return captures;
+    }
     return [regExpMatch.group(0)];
   }
 
