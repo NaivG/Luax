@@ -2,6 +2,30 @@ import 'package:lua_dardo_plus/lua.dart';
 import 'package:test/test.dart';
 
 void main() {
+  test('tonumber with base 16 and 0x prefix', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return tonumber("0xff", 16)');
+    ls.call(0, 1);
+    expect(ls.toInteger(-1), equals(255));
+  });
+
+  test('tonumber with base 16 and 0X prefix', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return tonumber("0XFF", 16)');
+    ls.call(0, 1);
+    expect(ls.toInteger(-1), equals(255));
+  });
+
+  test('tonumber with base 16 no prefix', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return tonumber("ff", 16)');
+    ls.call(0, 1);
+    expect(ls.toInteger(-1), equals(255));
+  });
+
   group('Basic Library Tests', () {
     late LuaState lua;
 

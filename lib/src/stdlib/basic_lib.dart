@@ -359,6 +359,10 @@ class BasicLib {
       String s = ls.toStr(1)!.trim();
       int base = ls.checkInteger(2)!;
       ls.argCheck(2 <= base && base <= 36, 2, "base out of range");
+      // Strip 0x/0X prefix for base 16
+      if (base == 16 && (s.startsWith('0x') || s.startsWith('0X'))) {
+        s = s.substring(2);
+      }
       try {
         int n = int.parse(s, radix: base);
         ls.pushInteger(n);
