@@ -192,6 +192,30 @@ void main() {
     expect(ls.toInteger(-1), lessThan(11));
   });
 
+  test('string.gsub with capture back-references', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return string.gsub("hello", "(h)", "%1%1")');
+    ls.call(0, 2);
+    expect(ls.toStr(-2), equals('hhello'));
+  });
+
+  test('string.gsub with multiple capture back-references', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return string.gsub("abc", "(a)(b)", "%2%1")');
+    ls.call(0, 2);
+    expect(ls.toStr(-2), equals('bac'));
+  });
+
+  test('string.gsub %0 refers to whole match', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return string.gsub("hello", "(%w+)", "[%0]")');
+    ls.call(0, 2);
+    expect(ls.toStr(-2), equals('[hello]'));
+  });
+
   test('lua table standard library test', () {
     expect(testString(), true);
   });

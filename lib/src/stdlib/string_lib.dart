@@ -434,6 +434,35 @@ class StringLib {
     return 2;
   }
 
+  /// Expand Lua-style back-references (%0, %1, %2, ...) in [repl]
+  /// using capture groups from [match].
+  static String _expandRepl(String repl, Match match) {
+    final buf = StringBuffer();
+    for (var i = 0; i < repl.length; i++) {
+      if (repl[i] == '%' && i + 1 < repl.length) {
+        final next = repl[i + 1];
+        if (next == '%') {
+          buf.write('%');
+          i++;
+        } else if (next.codeUnitAt(0) >= 48 /* '0' */ &&
+            next.codeUnitAt(0) <= 57 /* '9' */) {
+          final idx = next.codeUnitAt(0) - 48;
+          if (idx == 0) {
+            buf.write(match.group(0) ?? '');
+          } else if (idx <= match.groupCount) {
+            buf.write(match.group(idx) ?? '');
+          }
+          i++;
+        } else {
+          buf.write(repl[i]);
+        }
+      } else {
+        buf.write(repl[i]);
+      }
+    }
+    return buf.toString();
+  }
+
   // Fix #13: Rewrite gsub to properly handle replacements
   static List<dynamic> gsub(String? s, String pattern, String? repl, int n) {
     if (s == null || s.isEmpty) {
@@ -441,33 +470,22 @@ class StringLib {
     }
 
     final regExp = RegExp(luaPatternToRegex(pattern));
+    final replacement = repl ?? '';
     int nMatches = 0;
 
-    // If n < 0, replace all occurrences (unlimited)
-    // If n == 0, replace nothing
-    // If n > 0, replace up to n occurrences
     if (n == 0) {
       return [s, 0];
     }
 
-    String result;
-    if (n < 0) {
-      // Unlimited replacements
-      final matches = regExp.allMatches(s);
-      nMatches = matches.length;
-      result = s.replaceAll(regExp, repl ?? '');
-    } else {
-      // Limited replacements: replace first n occurrences
-      int count = 0;
-      result = s.replaceAllMapped(regExp, (match) {
-        if (count < n) {
-          count++;
-          return repl ?? '';
-        }
+    int count = 0;
+    final result = s.replaceAllMapped(regExp, (match) {
+      if (n >= 0 && count >= n) {
         return match.group(0)!;
-      });
-      nMatches = count;
-    }
+      }
+      count++;
+      return _expandRepl(replacement, match);
+    });
+    nMatches = count;
 
     return [result, nMatches];
   }
