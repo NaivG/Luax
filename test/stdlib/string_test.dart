@@ -468,6 +468,136 @@ void main() {
     expect(ls.toInteger(-1), equals(0));  // low byte
   });
 
+  // ---- Bug fixes: luaPatternToRegex correctness ----
+
+  // Bug 1: dot should match newline (Lua . matches ANY char including \n)
+  test('pattern . matches newline', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return string.match("ab\ncd", "(.+)")');
+    ls.call(0, 1);
+    expect(ls.toStr(-1), equals('ab\ncd'));
+  });
+
+  test('pattern . matches newline in find', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return string.find("ab\ncd", ".+")');
+    ls.call(0, 2);
+    expect(ls.toInteger(-2), equals(1));
+    expect(ls.toInteger(-1), equals(5));
+  });
+
+  // Bug 2: backslash is literal in Lua patterns, not a regex escape
+  test('backslash is literal in pattern', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    // In Lua source, "\\" is one backslash char.
+    // The string is "hello\world" (with literal backslash).
+    // Pattern "\\" matches a single literal backslash.
+    ls.loadString(r'''
+      local s = "hello\\world"
+      return string.find(s, "\\")
+    ''');
+    ls.call(0, 2);
+    expect(ls.toInteger(-2), equals(6));
+    expect(ls.toInteger(-1), equals(6));
+  });
+
+  // Bug 3: pipe | is literal in Lua patterns, not alternation
+  test('pipe is literal in pattern', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return string.match("a|b", "a|b")');
+    ls.call(0, 1);
+    expect(ls.toStr(-1), equals('a|b'));
+  });
+
+  test('pipe is literal - no alternation', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return string.match("b", "a|b")');
+    ls.call(0, 1);
+    // Lua: "a|b" is a literal 3-char pattern, won't match "b" alone
+    expect(ls.isNil(-1), isTrue);
+  });
+
+  // Bug 4: curly braces are literal in Lua patterns
+  test('curly braces are literal in pattern', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return string.match("x{3}", "%a{%d}")');
+    ls.call(0, 1);
+    expect(ls.toStr(-1), equals('x{3}'));
+  });
+
+  test('curly braces do not act as quantifiers', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    // In Lua, "%d{3}" means: digit, then literal {3}
+    // It should NOT match "123" (which regex \d{3} would)
+    ls.loadString(r'return string.match("5{3}", "%d{3}")');
+    ls.call(0, 1);
+    expect(ls.toStr(-1), equals('5{3}'));
+  });
+
+  // Bug 5: ^ mid-pattern is literal
+  test('caret mid-pattern is literal', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return string.match("2^10", "%d^%d+")');
+    ls.call(0, 1);
+    expect(ls.toStr(-1), equals('2^10'));
+  });
+
+  test('caret at start is still an anchor', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return string.match("abc", "^%a+")');
+    ls.call(0, 1);
+    expect(ls.toStr(-1), equals('abc'));
+  });
+
+  // Bug 6: $ mid-pattern is literal
+  test('dollar mid-pattern is literal', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return string.match("costs $10", "$%d+")');
+    ls.call(0, 1);
+    expect(ls.toStr(-1), equals('\$10'));
+  });
+
+  test('dollar at end is still an anchor', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return string.match("abc", "%a+$")');
+    ls.call(0, 1);
+    expect(ls.toStr(-1), equals('abc'));
+  });
+
+  // Bug 7: lazy quantifier after %-escaped chars whose literal is in exclusion set
+  test('lazy quantifier after escaped paren', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    // %(- means: match 0 or more literal ( lazily, then %) is literal )
+    // "()" should match: %(- matches empty, %) matches )
+    // Actually %(- matches zero (s, then %) matches )
+    // The full match on "()" is "()"
+    ls.loadString(r'return string.match("()", "%(-%)")') ;
+    ls.call(0, 1);
+    expect(ls.toStr(-1), equals('()'));
+  });
+
+  test('lazy quantifier after escaped star', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    // %*- means: 0 or more literal * lazily
+    // "%*-x" on "***x" should match "***x" (must consume *s to reach x)
+    ls.loadString(r'return string.match("***x", "%*-x")');
+    ls.call(0, 1);
+    expect(ls.toStr(-1), equals('***x'));
+  });
+
   // ---- Character classes inside bracket sets [%w], [%a%-], etc. ----
 
   test('pattern [%w]+ matches word chars', () {

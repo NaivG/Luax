@@ -643,7 +643,7 @@ class StringLib {
       return 2;
     }
 
-    var regex = RegExp(luaPatternToRegex(pattern));
+    var regex = RegExp(luaPatternToRegex(pattern), dotAll: true);
     var m = regex.firstMatch(tail);
     if (m == null) {
       ls.pushNil();
@@ -675,7 +675,7 @@ class StringLib {
       start = tail.indexOf(pattern);
       matchLen = pattern.length;
     } else {
-      var regex = RegExp(luaPatternToRegex(pattern));
+      var regex = RegExp(luaPatternToRegex(pattern), dotAll: true);
       var m = regex.firstMatch(tail);
       if (m != null) {
         start = m.start;
@@ -731,7 +731,7 @@ class StringLib {
       tail = s!.substring(init - 1);
     }
 
-    var regExpMatch = RegExp(luaPatternToRegex(pattern)).firstMatch(tail!);
+    var regExpMatch = RegExp(luaPatternToRegex(pattern), dotAll: true).firstMatch(tail!);
     if (regExpMatch == null) return null;
 
     // If the pattern has capture groups, return those; otherwise return the
@@ -764,7 +764,7 @@ class StringLib {
     }
 
     // Function or table replacement: iterate matches manually.
-    var regex = RegExp(luaPatternToRegex(pattern));
+    var regex = RegExp(luaPatternToRegex(pattern), dotAll: true);
     var buf = StringBuffer();
     var count = 0;
     var lastEnd = 0;
@@ -856,7 +856,7 @@ class StringLib {
       return [s ?? '', 0];
     }
 
-    final regExp = RegExp(luaPatternToRegex(pattern));
+    final regExp = RegExp(luaPatternToRegex(pattern), dotAll: true);
     final replacement = repl ?? '';
     int nMatches = 0;
 
@@ -882,7 +882,7 @@ class StringLib {
   static int _strGmatch(LuaState ls) {
     var s = ls.checkString(1)!;
     var pattern = ls.checkString(2)!;
-    var regex = RegExp(luaPatternToRegex(pattern));
+    var regex = RegExp(luaPatternToRegex(pattern), dotAll: true);
     var offset = 0;
 
     int gmatchAux(LuaState ls) {
@@ -972,16 +972,27 @@ class StringLib {
     }
   }
 
+  // Characters that are regex metacharacters but plain literals in Lua.
+  // We must escape them when they appear unescaped outside brackets.
+  static const _regexMetaChars = <String>{'\\', '|', '{', '}'};
+
   /// Convert a Lua pattern string to a Dart [RegExp] pattern.
+  ///
+  /// The returned pattern should be compiled with `dotAll: true` so that `.`
+  /// matches every character including newline (Lua semantics).
   static String luaPatternToRegex(String pat) {
     final buf = StringBuffer();
     final len = pat.length;
     var i = 0;
     var inBracket = false;
+    // Track whether the previous *logical item* can accept a quantifier.
+    // This is used to decide if `-` is a lazy quantifier or literal.
+    var prevIsQuantifiable = false;
 
     while (i < len) {
       final c = pat[i];
 
+      // --- %escape ---
       if (c == '%' && i + 1 < len) {
         final next = pat[i + 1];
         if (next == '%') {
@@ -1006,37 +1017,118 @@ class StringLib {
           }
         }
         i += 2;
+        prevIsQuantifiable = !inBracket;
         continue;
       }
 
+      // --- bracket open ---
       if (c == '[' && !inBracket) {
         inBracket = true;
         buf.write(c);
         i++;
+        // Handle ^ right after [ for negated set.
+        if (i < len && pat[i] == '^') {
+          buf.write('^');
+          i++;
+        }
+        // In Lua, ] immediately after [ or [^ is a literal member.
+        if (i < len && pat[i] == ']') {
+          buf.write('\\]');
+          i++;
+        }
+        prevIsQuantifiable = false;
         continue;
       }
+      // --- bracket close ---
       if (c == ']' && inBracket) {
         inBracket = false;
+        buf.write(c);
+        i++;
+        prevIsQuantifiable = true;
+        continue;
+      }
+
+      // Inside a bracket set, most characters are literal (except % handled
+      // above).  Just pass them through.
+      if (inBracket) {
         buf.write(c);
         i++;
         continue;
       }
 
-      if (c == '-' && !inBracket && i > 0 && i + 1 < len) {
-        final prev = pat[i - 1];
-        // In Lua, `-` is a non-greedy quantifier only after a character class
-        // item (letter, digit, `.`, `]`, or a `%x` escape).  After grouping
-        // parens or other quantifiers it is a literal dash.
-        if (prev != '*' && prev != '+' && prev != '?' && prev != '-' &&
-            prev != '(' && prev != ')') {
-          buf.write('*?');
-          i++;
-          continue;
-        }
+      // --- From here on we are outside brackets. ---
+
+      // Lua `-` as lazy (non-greedy) quantifier: 0 or more, shortest match.
+      // It applies after any quantifiable item.  Otherwise it's a literal.
+      if (c == '-' && prevIsQuantifiable && i + 1 < len) {
+        buf.write('*?');
+        i++;
+        prevIsQuantifiable = false;
+        continue;
       }
 
+      // `^` is an anchor only at the very start of the pattern.
+      if (c == '^') {
+        if (i == 0) {
+          buf.write('^');
+        } else {
+          buf.write('\\^');
+        }
+        i++;
+        prevIsQuantifiable = false;
+        continue;
+      }
+
+      // `$` is an anchor only at the very end of the pattern.
+      if (c == r'$') {
+        if (i == len - 1) {
+          buf.write(r'$');
+        } else {
+          buf.write(r'\$');
+        }
+        i++;
+        prevIsQuantifiable = false;
+        continue;
+      }
+
+      // Quantifiers: +  *  ?  — pass through (regex semantics match Lua).
+      if (c == '+' || c == '*' || c == '?') {
+        buf.write(c);
+        i++;
+        prevIsQuantifiable = false;
+        continue;
+      }
+
+      // Capture parens — pass through.  In Lua, capture groups are NOT
+      // repeatable items, so `-` / `*` / `+` / `?` after `)` is literal.
+      if (c == '(' || c == ')') {
+        buf.write(c);
+        i++;
+        prevIsQuantifiable = false;
+        continue;
+      }
+
+      // `.` matches any character (including newline via dotAll flag).
+      if (c == '.') {
+        buf.write('.');
+        i++;
+        prevIsQuantifiable = true;
+        continue;
+      }
+
+      // Regex metacharacters that are literal in Lua: \ | { }
+      if (_regexMetaChars.contains(c)) {
+        buf.write('\\');
+        buf.write(c);
+        i++;
+        prevIsQuantifiable = true;
+        continue;
+      }
+
+      // Ordinary literal character.
       buf.write(c);
       i++;
+      prevIsQuantifiable = true;
     }
 
     return buf.toString();
