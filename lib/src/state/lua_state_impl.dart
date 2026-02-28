@@ -1596,6 +1596,37 @@ class LuaStateImpl implements LuaState, LuaVM {
       throw Exception('No closure to resume');
     }
 
+    // The resume arguments (pushed by xmove in _coResume) sit on top of
+    // the current frame's stack.  They must be placed into the registers
+    // where the interrupted CALL instruction expects its results — exactly
+    // what popResults would have done had the CALL completed normally.
+    if (_stack!.closure!.proto != null && _stack!.pc > 0) {
+      final prevInstr = _stack!.closure!.proto!.code[_stack!.pc - 1];
+      final opCode = Instruction.getOpCode(prevInstr);
+      if (opCode.name == "CALL" || opCode.name == "TAILCALL") {
+        final a = Instruction.getA(prevInstr) + 1;
+        final c = Instruction.getC(prevInstr);
+        if (c == 1) {
+          // No results expected — discard the resume args.
+          for (var i = 0; i < nArgs; i++) {
+            pop(1);
+          }
+        } else if (c > 1) {
+          // Exactly c-1 results expected.
+          final nExpected = c - 1;
+          final vals = _stack!.popN(nArgs);
+          _stack!.pushN(vals, nExpected);
+          for (int j = a + nExpected - 1; j >= a; j--) {
+            replace(j);
+          }
+        } else {
+          // Variable results (c == 0) — leave on stack.
+          checkStack(1);
+          pushInteger(a);
+        }
+      }
+    }
+
     // Continue the innermost frame that was interrupted by yield.
     _runLuaClosure();
 

@@ -377,9 +377,6 @@ void main() {
       expect(r?[2], equals('dead'));
     });
 
-    // BUG: Multi-resume with values passed to yield() corrupts the stack.
-    // The second resume() call fails with "attempt to call a non-function
-    // value". This test will start passing once the bug is fixed.
     test('multi-resume yield accumulator', () {
       final r = _run('''
         local co = coroutine.create(function()
@@ -397,6 +394,54 @@ void main() {
         if ok then return result else return -1 end
       ''', 1);
       expect(r?[0], equals('60'));
-    }, skip: 'coroutine multi-resume corrupts stack');
+    });
+
+    Glados(any.intInRange(1, 20)).test(
+      'yield n times then sum resume values',
+      (n) {
+        final r = _run('''
+          local co = coroutine.create(function()
+            local sum = 0
+            for i = 1, $n do
+              local v = coroutine.yield(i)
+              sum = sum + v
+            end
+            return sum
+          end)
+          local total = 0
+          local ok, yielded = coroutine.resume(co)
+          for i = 1, $n do
+            ok, yielded = coroutine.resume(co, i * 10)
+          end
+          return yielded
+        ''', 1);
+        final expected = Iterable.generate(n, (i) => (i + 1) * 10).reduce((a, b) => a + b);
+        expect(r?[0], equals('$expected'));
+      },
+    );
+
+    Glados(any.intInRange(1, 15)).test(
+      'yield passes values both directions',
+      (n) {
+        final r = _run('''
+          local co = coroutine.create(function()
+            local sum = 0
+            for i = 1, $n do
+              local v = coroutine.yield(sum)
+              sum = sum + v
+            end
+            return sum
+          end)
+          coroutine.resume(co)
+          local ok, v
+          for i = 1, $n do
+            ok, v = coroutine.resume(co, i)
+          end
+          return v
+        ''', 1);
+        final expected = n * (n + 1) ~/ 2;
+        expect(r?[0], equals('$expected'));
+      },
+    );
   });
 }
