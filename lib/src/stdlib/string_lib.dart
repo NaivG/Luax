@@ -945,6 +945,33 @@ class StringLib {
     }
   }
 
+  /// Like [_luaClassToRegex] but returns the *inner* content suitable for
+  /// embedding inside an existing `[...]` character class.  Strips outer
+  /// brackets so we don't produce nested `[[...]]` which breaks the regex.
+  static String? _luaClassToRegexInBracket(String c) {
+    switch (c) {
+      case 'a': return 'a-zA-Z';
+      case 'A': return '^a-zA-Z';
+      case 'd': return '0-9';
+      case 'D': return '^0-9';
+      case 'l': return 'a-z';
+      case 'L': return '^a-z';
+      case 'u': return 'A-Z';
+      case 'U': return '^A-Z';
+      case 'w': return 'a-zA-Z0-9';
+      case 'W': return '^a-zA-Z0-9';
+      case 's': return r'\s';
+      case 'S': return r'\S';
+      case 'p': return r'^\w\s';
+      case 'P': return r'\w\s';
+      case 'x': return '0-9a-fA-F';
+      case 'X': return '^0-9a-fA-F';
+      case 'c': return '\x00-\x1f\x7f';
+      case 'C': return '^\x00-\x1f\x7f';
+      default:  return null;
+    }
+  }
+
   /// Convert a Lua pattern string to a Dart [RegExp] pattern.
   static String luaPatternToRegex(String pat) {
     final buf = StringBuffer();
@@ -959,6 +986,16 @@ class StringLib {
         final next = pat[i + 1];
         if (next == '%') {
           buf.write('%');
+        } else if (inBracket) {
+          // Inside [...], use the bracket-safe (unwrapped) form of classes.
+          final cls = _luaClassToRegexInBracket(next);
+          if (cls != null) {
+            buf.write(cls);
+          } else {
+            // Escaped literal (e.g. %-  %]  %[) — write as regex escape.
+            buf.write('\\');
+            buf.write(next);
+          }
         } else {
           final cls = _luaClassToRegex(next);
           if (cls != null) {

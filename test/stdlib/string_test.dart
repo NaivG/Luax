@@ -468,6 +468,104 @@ void main() {
     expect(ls.toInteger(-1), equals(0));  // low byte
   });
 
+  // ---- Character classes inside bracket sets [%w], [%a%-], etc. ----
+
+  test('pattern [%w]+ matches word chars', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return string.match("hello42world", "[%w]+")');
+    ls.call(0, 1);
+    expect(ls.toStr(-1), equals('hello42world'));
+  });
+
+  test('pattern [%a]+ matches only letters', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return string.match("abc123", "[%a]+")');
+    ls.call(0, 1);
+    expect(ls.toStr(-1), equals('abc'));
+  });
+
+  test('pattern [%d]+ matches only digits', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return string.match("abc123", "[%d]+")');
+    ls.call(0, 1);
+    expect(ls.toStr(-1), equals('123'));
+  });
+
+  test('pattern [%w%-]+ matches word chars and hyphens', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return string.match("my-slug-42", "[%w%-]+")');
+    ls.call(0, 1);
+    expect(ls.toStr(-1), equals('my-slug-42'));
+  });
+
+  test('pattern [%a%-]+ matches letters and hyphens', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return string.match("foo-bar-baz", "[%a%-]+")');
+    ls.call(0, 1);
+    expect(ls.toStr(-1), equals('foo-bar-baz'));
+  });
+
+  test('pattern [%a%d]+ matches letters and digits', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return string.match("a1b2c3!!", "[%a%d]+")');
+    ls.call(0, 1);
+    expect(ls.toStr(-1), equals('a1b2c3'));
+  });
+
+  test('pattern [%s%d]+ matches whitespace and digits', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return string.match("abc 123", "[%s%d]+")');
+    ls.call(0, 1);
+    expect(ls.toStr(-1), equals(' 123'));
+  });
+
+  test('pattern [%w%-]+ in gmatch iterates hyphenated tokens', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'''
+      local result = {}
+      for w in string.gmatch("one-two three-four", "[%w%-]+") do
+        result[#result + 1] = w
+      end
+      return result[1], result[2]
+    ''');
+    ls.call(0, 2);
+    expect(ls.toStr(-2), equals('one-two'));
+    expect(ls.toStr(-1), equals('three-four'));
+  });
+
+  test('pattern [%w%-]+ in gsub replaces hyphenated words', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return string.gsub("my-var", "[%w%-]+", "X")');
+    ls.call(0, 2);
+    expect(ls.toStr(-2), equals('X'));
+    expect(ls.toInteger(-1), equals(1));
+  });
+
+  test('pattern [%w%.%-]+ matches URL-path-like strings', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return string.match("example.com/my-page", "[%w%.%-]+")');
+    ls.call(0, 1);
+    expect(ls.toStr(-1), equals('example.com'));
+  });
+
+  test('pattern [%l%u]+ is equivalent to [%a]+', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return string.match("Hello123", "[%l%u]+")');
+    ls.call(0, 1);
+    expect(ls.toStr(-1), equals('Hello'));
+  });
+
   test('lua table standard library test', () {
     expect(testString(), true);
   });
