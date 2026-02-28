@@ -852,8 +852,8 @@ class StringLib {
 
   // Fix #13: Rewrite gsub to properly handle replacements
   static List<dynamic> gsub(String? s, String pattern, String? repl, int n) {
-    if (s == null || s.isEmpty) {
-      return [s ?? '', 0];
+    if (s == null) {
+      return ['', 0];
     }
 
     final regExp = RegExp(luaPatternToRegex(pattern), dotAll: true);
@@ -884,9 +884,14 @@ class StringLib {
     var pattern = ls.checkString(2)!;
     var regex = RegExp(luaPatternToRegex(pattern), dotAll: true);
     var offset = 0;
+    // If pattern is anchored with ^, only match at the start (offset 0).
+    var anchoredStart = pattern.startsWith('^');
 
     int gmatchAux(LuaState ls) {
       while (offset <= s.length) {
+        // For ^-anchored patterns, only attempt at offset 0.
+        if (anchoredStart && offset > 0) return 0;
+
         var tail = s.substring(offset);
         var m = regex.firstMatch(tail);
         if (m == null) return 0;
