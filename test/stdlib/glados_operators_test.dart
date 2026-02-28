@@ -377,10 +377,10 @@ void main() {
       expect(r?[2], equals('dead'));
     });
 
-    // NOTE: Multi-resume with values passed to yield() is currently broken.
-    // `sum = sum + coroutine.yield()` in a loop crashes with stack corruption.
-    // Filed as known issue.
-    test('known bug: multi-resume with yield in expression', () {
+    // BUG: Multi-resume with values passed to yield() corrupts the stack.
+    // The second resume() call fails with "attempt to call a non-function
+    // value". This test will start passing once the bug is fixed.
+    test('multi-resume yield accumulator', () {
       final r = _run('''
         local co = coroutine.create(function()
           local sum = 0
@@ -394,10 +394,9 @@ void main() {
         coroutine.resume(co, 10)
         coroutine.resume(co, 20)
         local ok, result = coroutine.resume(co, 30)
-        if ok then return result else return "BUG" end
+        if ok then return result else return -1 end
       ''', 1);
-      // When this starts returning '60' instead of 'BUG', the bug is fixed!
-      expect(r?[0], anyOf(equals('60'), equals('BUG')));
-    });
+      expect(r?[0], equals('60'));
+    }, skip: 'coroutine multi-resume corrupts stack');
   });
 }
