@@ -58,16 +58,22 @@ class StatParser {
   // ‘::’ Name ‘::’
    static LabelStat parseLabelStat(Lexer lexer) {
     lexer.nextTokenOfKind(TokenKind.TOKEN_SEP_LABEL);          // ::
+    int line = lexer.line;
     String? name = lexer.nextIdentifier().value; // name
     lexer.nextTokenOfKind(TokenKind.TOKEN_SEP_LABEL);          // ::
-    return LabelStat(name);
+    LabelStat stat = LabelStat(name);
+    stat.line = line;
+    return stat;
   }
 
   // goto Name
    static GotoStat parseGotoStat(Lexer lexer) {
     lexer.nextTokenOfKind(TokenKind.TOKEN_KW_GOTO);            // goto
+    int line = lexer.line;
     String? name = lexer.nextIdentifier().value; // name
-    return GotoStat(name);
+    GotoStat stat = GotoStat(name);
+    stat.line = line;
+    return stat;
   }
 
   // do block end

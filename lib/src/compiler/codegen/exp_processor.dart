@@ -74,6 +74,7 @@ class ExpProcessor {
 
     BlockProcessor.processBlock(subFI, node.block);
     subFI.exitScope(subFI.pc() + 2);
+    subFI.checkUnresolvedGotos();
     subFI.emitReturn(node.lastLine, 0, 0);
 
     int bx = fi.subFuncs.length - 1;

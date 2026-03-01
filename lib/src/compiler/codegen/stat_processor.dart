@@ -31,9 +31,10 @@ class StatProcessor {
       processLocalVarDeclStat(fi, node);
     } else if (node is LocalFuncDefStat) {
       processLocalFuncDefStat(fi, node);
-    } else if (node is LabelStat
-    || node is GotoStat) {
-      throw Exception("label and goto statements are not supported!");
+    } else if (node is LabelStat) {
+      processLabelStat(fi, node);
+    } else if (node is GotoStat) {
+      processGotoStat(fi, node);
     }
   }
 
@@ -51,6 +52,57 @@ class StatProcessor {
   static void processBreakStat(FuncInfo fi, BreakStat node) {
     int pc = fi.emitJmp(node.line, 0, 0);
     fi.addBreakJmp(pc);
+  }
+
+  static void processLabelStat(FuncInfo fi, LabelStat node) {
+    // Check for duplicate label at current scope level
+    if (fi.labels.containsKey(node.name) &&
+        fi.labels[node.name]!.scopeLv == fi.scopeLv) {
+      throw Exception("label '${node.name}' already defined");
+    }
+
+    // Record the label. pc is fi.pc() (the last emitted instruction index);
+    // the target of a jump to this label is fi.pc() + 1 (the next instruction).
+    fi.labels[node.name] =
+        LabelInfo(fi.pc(), fi.scopeLv, fi.usedRegs);
+
+    // Resolve any pending forward gotos that target this label
+    fi.pendingGotos.removeWhere((g) {
+      if (g.name != node.name) return false;
+
+      // Label must not be deeper than goto (can't jump into a nested block)
+      if (fi.scopeLv > g.scopeLv) return false;
+
+      // Check for jumping over local variable declarations:
+      // If the label has more active locals than the goto had,
+      // new locals were introduced between the goto and the label.
+      if (fi.usedRegs > g.nActVar) {
+        throw Exception(
+            "<goto ${g.name}> at line ${g.line} jumps into the scope of "
+            "local variable");
+      }
+
+      // Patch the JMP instruction: target is fi.pc() + 1,
+      // sBx = (fi.pc() + 1) - g.pc - 1 = fi.pc() - g.pc
+      fi.fixSbx(g.pc, fi.pc() - g.pc);
+      return true; // remove from pending list
+    });
+  }
+
+  static void processGotoStat(FuncInfo fi, GotoStat node) {
+    // Check if label already exists (backward jump)
+    if (fi.labels.containsKey(node.name)) {
+      LabelInfo label = fi.labels[node.name]!;
+      // Backward jump: target is label.pc + 1,
+      // sBx = (label.pc + 1) - (fi.pc() + 1) - 1 = label.pc - fi.pc() - 1
+      fi.emitJmp(node.line, 0, label.pc - fi.pc() - 1);
+      return;
+    }
+
+    // Forward jump: emit JMP with placeholder offset, record for later
+    int pc = fi.emitJmp(node.line, 0, 0);
+    fi.pendingGotos
+        .add(GotoInfo(pc, fi.scopeLv, fi.usedRegs, node.name, node.line));
   }
 
   static void processDoStat(FuncInfo fi, DoStat node) {

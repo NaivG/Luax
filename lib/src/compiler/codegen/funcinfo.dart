@@ -5,6 +5,24 @@ import '../ast/exp.dart';
 import '../lexer/token.dart';
 import '../../vm/instruction.dart';
 
+class LabelInfo {
+  int pc;
+  int scopeLv;
+  int nActVar;
+
+  LabelInfo(this.pc, this.scopeLv, this.nActVar);
+}
+
+class GotoInfo {
+  int pc;
+  int scopeLv;
+  int nActVar;
+  String name;
+  int line;
+
+  GotoInfo(this.pc, this.scopeLv, this.nActVar, this.name, this.line);
+}
+
 class UpvalInfo {
   int locVarSlot;
   int upvalIndex;
@@ -52,6 +70,8 @@ class FuncInfo {
   Map<String?, UpvalInfo> upvalues = Map<String?, UpvalInfo>();
   Map<Object?, int> constants = Map<Object?, int>();
   List<List<int>?> breaks = <List<int>?>[];
+  Map<String, LabelInfo> labels = {};
+  List<GotoInfo> pendingGotos = [];
   List<int> insts = <int>[];
   List<int> lineNums = <int>[];
   int? line;
@@ -146,6 +166,8 @@ class FuncInfo {
     }
     
     scopeLv--;
+    // Remove labels that are going out of scope
+    labels.removeWhere((_, info) => info.scopeLv > scopeLv);
     Map<String?, LocVarInfo?> tmp = Map.from(locNames);
     for (LocVarInfo? locVar in tmp.values) {
       if (locVar!.scopeLv> scopeLv) {
@@ -153,6 +175,14 @@ class FuncInfo {
         locVar.endPC = endPC;
         removeLocVar(locVar);
       }
+    }
+  }
+
+  void checkUnresolvedGotos() {
+    if (pendingGotos.isNotEmpty) {
+      GotoInfo g = pendingGotos.first;
+      throw Exception(
+          "no visible label '${g.name}' for <goto> at line ${g.line}");
     }
   }
 
