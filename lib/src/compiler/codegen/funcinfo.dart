@@ -9,8 +9,9 @@ class LabelInfo {
   int pc;
   int scopeLv;
   int nActVar;
+  LabelInfo? prev; // previous label with same name at outer scope
 
-  LabelInfo(this.pc, this.scopeLv, this.nActVar);
+  LabelInfo(this.pc, this.scopeLv, this.nActVar, [this.prev]);
 }
 
 class GotoInfo {
@@ -166,8 +167,20 @@ class FuncInfo {
     }
     
     scopeLv--;
-    // Remove labels that are going out of scope
-    labels.removeWhere((_, info) => info.scopeLv > scopeLv);
+    // Remove labels going out of scope; restore shadowed outer labels
+    Map<String, LabelInfo?> labelUpdates = {};
+    labels.forEach((name, info) {
+      if (info.scopeLv > scopeLv) {
+        labelUpdates[name] = info.prev; // null = remove entirely
+      }
+    });
+    labelUpdates.forEach((name, prev) {
+      if (prev != null) {
+        labels[name] = prev;
+      } else {
+        labels.remove(name);
+      }
+    });
     Map<String?, LocVarInfo?> tmp = Map.from(locNames);
     for (LocVarInfo? locVar in tmp.values) {
       if (locVar!.scopeLv> scopeLv) {
@@ -301,6 +314,15 @@ class FuncInfo {
     int i = insts[pc];
     i = LuaMath.toInt32(i << 18) >> 18; // clear sBx
     i = i | LuaMath.toInt32((sBx + Instruction.maxArg_sbx) << 14); // reset sBx
+    insts[pc] = i;
+  }
+
+  /// Patch the A field (bits 6-13) of an already-emitted instruction.
+  /// Used by goto resolution to set upvalue-closing level.
+  void fixA(int pc, int a) {
+    int i = insts[pc];
+    // Clear bits 6-13 (the A field) and set new value
+    i = (i & ~0x3FC0) | ((a & 0xFF) << 6);
     insts[pc] = i;
   }
 

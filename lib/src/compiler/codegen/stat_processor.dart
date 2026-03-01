@@ -61,10 +61,12 @@ class StatProcessor {
       throw Exception("label '${node.name}' already defined");
     }
 
-    // Record the label. pc is fi.pc() (the last emitted instruction index);
-    // the target of a jump to this label is fi.pc() + 1 (the next instruction).
+    // Record the label, chaining to any shadowed outer-scope label
+    LabelInfo? prev = fi.labels.containsKey(node.name)
+        ? fi.labels[node.name]
+        : null;
     fi.labels[node.name] =
-        LabelInfo(fi.pc(), fi.scopeLv, fi.usedRegs);
+        LabelInfo(fi.pc(), fi.scopeLv, fi.usedRegs, prev);
 
     // Resolve any pending forward gotos that target this label
     fi.pendingGotos.removeWhere((g) {
@@ -82,9 +84,16 @@ class StatProcessor {
             "local variable");
       }
 
-      // Patch the JMP instruction: target is fi.pc() + 1,
-      // sBx = (fi.pc() + 1) - g.pc - 1 = fi.pc() - g.pc
+      // Patch the JMP instruction
       fi.fixSbx(g.pc, fi.pc() - g.pc);
+
+      // Patch A field for upvalue closing: if the goto had more active
+      // locals than the label, those registers may hold upvalues that
+      // need closing. a = label.nActVar + 1 closes R(label.nActVar)+.
+      if (g.nActVar > fi.usedRegs) {
+        fi.fixA(g.pc, fi.usedRegs + 1);
+      }
+
       return true; // remove from pending list
     });
   }
@@ -93,9 +102,14 @@ class StatProcessor {
     // Check if label already exists (backward jump)
     if (fi.labels.containsKey(node.name)) {
       LabelInfo label = fi.labels[node.name]!;
-      // Backward jump: target is label.pc + 1,
-      // sBx = (label.pc + 1) - (fi.pc() + 1) - 1 = label.pc - fi.pc() - 1
-      fi.emitJmp(node.line, 0, label.pc - fi.pc() - 1);
+      // Upvalue closing: if we have more active locals than the label,
+      // set a = label.nActVar + 1 to close upvalues >= R(label.nActVar).
+      int a = 0;
+      if (fi.usedRegs > label.nActVar) {
+        a = label.nActVar + 1;
+      }
+      // Backward jump: target is label.pc + 1
+      fi.emitJmp(node.line, a, label.pc - fi.pc() - 1);
       return;
     }
 
