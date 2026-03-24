@@ -3,19 +3,15 @@ import 'lua_table.dart';
 import 'lua_value.dart';
 
 class Comparison {
-
   static bool eq(Object? a, Object? b, LuaStateImpl? ls) {
     if (a == null) {
       return b == null;
     } else if (a is bool || a is String) {
       return a == b;
-    } else if (a is int) {
-      return a == b ||
-          (b is double && b == a.toDouble());
-    } else if (a is double) {
-      return a == b ||
-          (b is int && a == b.toDouble());
-    } else if (a is LuaTable) { // meta method
+    } else if (a is num && b is num) {
+      return a == b;
+    } else if (a is LuaTable) {
+      // meta method
       if (b is LuaTable && a != b && ls != null) {
         Object? mm = ls.getMetamethod(a, b, "__eq");
         if (mm != null) {
@@ -23,7 +19,7 @@ class Comparison {
         }
       }
       return a == b;
-    }else {
+    } else {
       return a == b;
     }
   }
@@ -32,19 +28,8 @@ class Comparison {
     if (a is String && b is String) {
       return a.compareTo(b) < 0;
     }
-    if (a is int) {
-      if (b is int) {
-        return a < b;
-      } else if (b is double) {
-        return a.compareTo(b) < 0;
-      }
-    }
-    if (a is double) {
-      if (b is double) {
-        return a < b;
-      } else if (b is int) {
-        return a.compareTo(b) < 0;
-      }
+    if (a is num && b is num) {
+      return a < b;
     }
 
     Object? mm = ls.getMetamethod(a, b, "__lt");
@@ -53,26 +38,17 @@ class Comparison {
     }
 
     // Fix #33: Include line number in error message
-    throw Exception(ls.formatError("attempt to compare ${LuaValue.typeName(a)} with ${LuaValue.typeName(b)}"));
+    throw Exception(ls.formatError(
+      "attempt to compare ${LuaValue.typeName(a)} with ${LuaValue.typeName(b)}",
+    ));
   }
 
   static bool le(Object? a, Object? b, LuaStateImpl ls) {
     if (a is String && b is String) {
       return a.compareTo(b) <= 0;
     }
-    if (a is int) {
-      if (b is int) {
-        return a <= b;
-      } else if (b is double) {
-        return a.compareTo(b) <= 0;
-      }
-    }
-    if (a is double) {
-      if (b is double) {
-        return  a <= b;
-      } else if (b is int) {
-        return a.compareTo(b) <= 0;
-      }
+    if (a is num && b is num) {
+      return a <= b;
     }
 
     Object? mm = ls.getMetamethod(a, b, "__le");
@@ -85,7 +61,8 @@ class Comparison {
     }
 
     // Fix #33: Include line number in error message
-    throw Exception(ls.formatError("attempt to compare ${LuaValue.typeName(a)} with ${LuaValue.typeName(b)}"));
+    throw Exception(ls.formatError(
+      "attempt to compare ${LuaValue.typeName(a)} with ${LuaValue.typeName(b)}",
+    ));
   }
-
 }

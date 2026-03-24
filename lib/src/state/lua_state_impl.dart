@@ -342,9 +342,7 @@ class LuaStateImpl implements LuaState, LuaVM {
   @override
   double? toNumberX(int idx) {
     Object? val = _stack!.get(idx);
-    if (val is double) {
-      return val;
-    } else if (val is int) {
+    if (val is num) {
       return val.toDouble();
     } else if (val is String) {
       // Lua 5.3: lua_tonumberx coerces strings to numbers.
@@ -401,7 +399,7 @@ class LuaStateImpl implements LuaState, LuaVM {
     Object? val = _stack!.get(idx);
     if (val is String) {
       return val;
-    } else if (val is int || val is double) {
+    } else if (val is num) {
       return val.toString();
     } else {
       return null;
@@ -418,7 +416,8 @@ class LuaStateImpl implements LuaState, LuaVM {
       _stack!.push(result);
     } else {
       // Fix #33: Include line number in error message
-      throw Exception(_stack!.formatError("attempt to perform arithmetic on a non-number value"));
+      throw Exception(_stack!
+          .formatError("attempt to perform arithmetic on a non-number value"));
     }
   }
 
@@ -466,7 +465,8 @@ class LuaStateImpl implements LuaState, LuaVM {
         }
 
         // Fix #33: Include line number in error message
-        throw Exception(_stack!.formatError("attempt to concatenate non-string values"));
+        throw Exception(
+            _stack!.formatError("attempt to concatenate non-string values"));
       }
     }
     // n == 1, do nothing
@@ -490,7 +490,8 @@ class LuaStateImpl implements LuaState, LuaVM {
       pushInteger(val.length());
     } else {
       // Fix #33: Include line number in error message
-      throw Exception(_stack!.formatError("attempt to get length of a ${LuaValue.typeName(val)} value"));
+      throw Exception(_stack!.formatError(
+          "attempt to get length of a ${LuaValue.typeName(val)} value"));
     }
   }
 
@@ -544,7 +545,8 @@ class LuaStateImpl implements LuaState, LuaVM {
       }
     }
     // Fix #33: Include line number in error message
-    throw Exception(_stack!.formatError("attempt to index a ${LuaValue.typeName(t)} value"));
+    throw Exception(_stack!
+        .formatError("attempt to index a ${LuaValue.typeName(t)} value"));
   }
 
   @override
@@ -608,7 +610,8 @@ class LuaStateImpl implements LuaState, LuaVM {
       }
     }
     // Fix #33: Include line number in error message
-    throw Exception(_stack!.formatError("attempt to index a ${LuaValue.typeName(t)} value"));
+    throw Exception(_stack!
+        .formatError("attempt to index a ${LuaValue.typeName(t)} value"));
   }
 
   @override
@@ -635,7 +638,8 @@ class LuaStateImpl implements LuaState, LuaVM {
       }
     } else {
       // Fix #33: Include line number in error message
-      throw Exception(_stack!.formatError("attempt to call a non-function value"));
+      throw Exception(
+          _stack!.formatError("attempt to call a non-function value"));
     }
   }
 
@@ -739,8 +743,7 @@ class LuaStateImpl implements LuaState, LuaVM {
   }
 
   /// Asynchronously call an async Dart closure.
-  Future<void> _callDartClosureAsync(
-      int nArgs, int nResults, Closure c) async {
+  Future<void> _callDartClosureAsync(int nArgs, int nResults, Closure c) async {
     // create new lua stack
     LuaStack newStack = LuaStack();
     newStack.state = this;
@@ -1632,8 +1635,7 @@ class LuaStateImpl implements LuaState, LuaVM {
 
     // Unwind nested Lua function calls that were interrupted by yield.
     // Stop when the parent frame has no Lua proto (i.e. it's the root).
-    while (_stack!.prev != null &&
-        _stack!.prev!.closure?.proto != null) {
+    while (_stack!.prev != null && _stack!.prev!.closure?.proto != null) {
       final innerStack = _stack!;
       final nRegs = innerStack.closure?.proto?.maxStackSize ?? 0;
       final results = innerStack.popN(innerStack.top() - nRegs);

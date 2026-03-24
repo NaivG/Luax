@@ -12,7 +12,7 @@ class LuaValue {
       return LuaType.luaNil;
     } else if (val is bool) {
       return LuaType.luaBoolean;
-    } else if (val is int || val is double) {
+    } else if (val is num) {
       return LuaType.luaNumber;
     } else if (val is String) {
       return LuaType.luaString;
@@ -35,7 +35,7 @@ class LuaValue {
       return "nil";
     } else if (val is bool) {
       return "boolean";
-    } else if (val is int || val is double) {
+    } else if (val is num) {
       return "number";
     } else if (val is String) {
       return "string";
@@ -64,9 +64,7 @@ class LuaValue {
 
   // http://www.lua.org/manual/5.3/manual.html#3.4.3
   static double? toFloat(Object? val) {
-    if (val is double) {
-      return val.toDouble();
-    } else if (val is int) {
+    if (val is num) {
       return val.toDouble();
     } else if (val is String) {
       return LuaNumber.parseFloat(val);
