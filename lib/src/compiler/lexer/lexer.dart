@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'char_sequence.dart';
 import 'token.dart';
 
@@ -232,7 +234,27 @@ class Lexer {
     }
   }
 
+  /// Flush buffered \xXX / \ddd bytes into [_buff], decoding them as
+  /// UTF-8 when possible.  Falls back to writing raw char codes (the
+  /// previous behaviour) when the bytes are not valid UTF-8.
+  void _flushPendingBytes(List<int> pending) {
+    if (pending.isEmpty) return;
+    try {
+      _buff.write(utf8.decode(pending));
+    } catch (_) {
+      for (var b in pending) {
+        _buff.writeCharCode(b);
+      }
+    }
+    pending.clear();
+  }
+
   String readString() {
+    // Accumulator for consecutive \xXX and \ddd byte escapes so that
+    // multi-byte UTF-8 sequences (e.g. "\xc2\xb7" → U+00B7) are decoded
+    // into proper Dart characters instead of being stored per-byte.
+    final pendingBytes = <int>[];
+
     String del = chunk.current;
     _save_and_next();
     while (chunk.current != del) {
@@ -273,12 +295,13 @@ class Lexer {
               case 'x': // '\xXX'
                 var hex = chunk.substring(1, 3);
                 if(CharSequence.isxDigit(hex)){
-                  _save_c(int.parse(hex, radix: 16));
+                  pendingBytes.add(int.parse(hex, radix: 16));
                   chunk.next(3);
                   continue;
                 }else error("hexadecimal digit expected");
                 break;
               case 'u': // '\u{XXX}'
+                _flushPendingBytes(pendingBytes);
                 chunk.next(1);
                 if(chunk.current != '{') error("missing '{'");
 
@@ -294,15 +317,18 @@ class Lexer {
                 }else error("UTF-8 value too large near '$seq'");
                 continue;
               case '\n': case '\r':
+                _flushPendingBytes(pendingBytes);
                 _save_c(10); // write '\n'
                 _incLineNumber();
                 continue;
               case '\\': case '"': case '\'':
+                _flushPendingBytes(pendingBytes);
                 _save_and_next();
                 continue;
               case '': // EOZ
                 continue; // will raise an error next loop
               case 'z':    // zap following span of spaces
+                _flushPendingBytes(pendingBytes);
                 chunk.next(1);
                 while (chunk.length > 0 &&
                     CharSequence.isWhiteSpace(chunk.current)) {
@@ -314,24 +340,27 @@ class Lexer {
                 if (!CharSequence.isDigit(chunk.current)) {
                   error("invalid escape sequence near '\\${chunk.current}'");
                 } else {  // digital escape '\ddd'
-                  c = 0;
+                  int d = 0;
                   /* 最多读取3位数字 */
                   for (int i = 0; i < 3 && CharSequence.isDigit(chunk.current); i++) {
-                    c = 10 * c + (chunk.current - '0') as int;
-                      chunk.next(1);
+                    d = d * 10 + chunk.current.codeUnitAt(0) - 48 as int;
+                    chunk.next(1);
                   }
-                  _save_c(c);
+                  pendingBytes.add(d);
                 }
                 continue;
             }
+            _flushPendingBytes(pendingBytes);
             _save_c(c);
             chunk.next(1);
             continue;
           }
         default:
+          _flushPendingBytes(pendingBytes);
           _save_and_next();
       }
     }
+    _flushPendingBytes(pendingBytes);
     _save_and_next(); // 跳过分隔符
     var rawToken = _buff.toString();
     return rawToken.substring(1, rawToken.length - 1);

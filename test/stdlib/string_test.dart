@@ -699,4 +699,80 @@ void main() {
   test('lua table standard library test', () {
     expect(testString(), true);
   });
+
+  // ── \xXX / \ddd UTF-8 byte-escape decoding ──────────────────────────
+
+  test('\\xc2\\xb7 decodes to U+00B7 middle dot', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return "\xc2\xb7"');
+    ls.call(0, 1);
+    expect(ls.toStr(-1), equals('\u00B7'));
+  });
+
+  test('\\xc3\\xa9 decodes to U+00E9 (é)', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return "caf\xc3\xa9"');
+    ls.call(0, 1);
+    expect(ls.toStr(-1), equals('café'));
+  });
+
+  test('\\xe2\\x80\\x94 decodes to U+2014 em dash', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return "\xe2\x80\x94"');
+    ls.call(0, 1);
+    expect(ls.toStr(-1), equals('\u2014'));
+  });
+
+  test('\\xf0\\x9f\\x98\\x80 decodes to U+1F600 (😀)', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return "\xf0\x9f\x98\x80"');
+    ls.call(0, 1);
+    expect(ls.toStr(-1), equals('\u{1F600}'));
+  });
+
+  test('\\ddd decimal escapes decode as UTF-8', () {
+    // \194\183 is \xc2\xb7 in decimal = U+00B7
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return "\194\183"');
+    ls.call(0, 1);
+    expect(ls.toStr(-1), equals('\u00B7'));
+  });
+
+  test('mixed \\xXX and plain ASCII', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return "A\xc2\xb7B"');
+    ls.call(0, 1);
+    expect(ls.toStr(-1), equals('A\u00B7B'));
+  });
+
+  test('consecutive multi-byte sequences', () {
+    // Two middle dots back-to-back
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return "\xc2\xb7\xc2\xb7"');
+    ls.call(0, 1);
+    expect(ls.toStr(-1), equals('\u00B7\u00B7'));
+  });
+
+  test('single ASCII \\xXX stays unchanged', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return "\x41"');
+    ls.call(0, 1);
+    expect(ls.toStr(-1), equals('A'));
+  });
+
+  test('\\u{B7} still produces U+00B7 directly', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return "\u{B7}"');
+    ls.call(0, 1);
+    expect(ls.toStr(-1), equals('\u00B7'));
+  });
 }
