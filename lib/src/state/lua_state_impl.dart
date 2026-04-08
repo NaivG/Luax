@@ -51,7 +51,21 @@ class LuaStateImpl implements LuaState, LuaVM {
   /// instruction — only once per [_runLuaClosure] invocation.
   static bool useSwitchDispatch = false;
 
-  LuaStack? _stack = LuaStack();
+  /// Controls the stack representation.
+  ///
+  /// When `true` (default), [LuaStack] uses a fixed-capacity array with an
+  /// explicit top pointer — `push` is a single indexed write, `pop` a single
+  /// read + null, and `popN` produces one list instead of three.
+  /// When `false`, the original growable-list behaviour is used (benchmark
+  /// baseline).
+  static bool useFixedStack = true;
+
+  /// Creates a [LuaStack] respecting the current [useFixedStack] flag.
+  static LuaStack _newStack([int capacity = 40]) {
+    return useFixedStack ? LuaStack(capacity) : LuaStack.growable();
+  }
+
+  LuaStack? _stack = _newStack();
 
   /// Registry table
   LuaTable? registry = LuaTable(0, 0);
@@ -67,7 +81,7 @@ class LuaStateImpl implements LuaState, LuaVM {
 
   LuaStateImpl() {
     registry!.put(luaRidxGlobals, LuaTable(0, 0));
-    LuaStack stack = LuaStack();
+    LuaStack stack = _newStack();
     stack.state = this;
     _pushLuaStack(stack);
     id = _genThreadId();
@@ -77,7 +91,7 @@ class LuaStateImpl implements LuaState, LuaVM {
   /// Constructor for creating a new thread (coroutine) that shares the registry
   LuaStateImpl.newThread(LuaTable registry) {
     this.registry = registry;
-    LuaStack stack = LuaStack();
+    LuaStack stack = _newStack();
     stack.state = this;
     _pushLuaStack(stack);
     id = _genThreadId();
@@ -245,9 +259,7 @@ class LuaStateImpl implements LuaState, LuaVM {
 
   @override
   void pop(int n) {
-    for (int i = 0; i < n; i++) {
-      _stack!.pop();
-    }
+    _stack!.popDiscard(n);
   }
 
   @override
@@ -309,17 +321,7 @@ class LuaStateImpl implements LuaState, LuaVM {
       // Fix #33: Include line number in error message
       throw Exception(_stack!.formatError("stack underflow!"));
     }
-
-    int n = _stack!.top() - newTop;
-    if (n > 0) {
-      for (int i = 0; i < n; i++) {
-        _stack!.pop();
-      }
-    } else if (n < 0) {
-      for (int i = 0; i > n; i--) {
-        _stack!.push(null);
-      }
-    }
+    _stack!.setTopDirect(newTop);
   }
 
   @override
@@ -449,9 +451,6 @@ class LuaStateImpl implements LuaState, LuaVM {
         return Comparison.lt(a, b, this);
       case CmpOp.luaOpLe:
         return Comparison.le(a, b, this);
-      default:
-        // Fix #33: Include line number in error message
-        throw Exception(_stack!.formatError("invalid compare op!"));
     }
   }
 
@@ -662,7 +661,7 @@ class LuaStateImpl implements LuaState, LuaVM {
     bool isVararg = c.proto!.isVararg == 1;
 
     // create new lua stack
-    LuaStack newStack = LuaStack(/*nRegs + 20*/);
+    LuaStack newStack = _newStack(nRegs + 20);
     newStack.state = this;
     newStack.closure = c;
 
@@ -689,7 +688,7 @@ class LuaStateImpl implements LuaState, LuaVM {
 
   void _callDartClosure(int nArgs, int nResults, Closure c) {
     // create new lua stack
-    LuaStack newStack = new LuaStack(/*nRegs+LUA_MINSTACK*/);
+    LuaStack newStack = _newStack();
     newStack.state = this;
     newStack.closure = c;
 
@@ -898,7 +897,7 @@ class LuaStateImpl implements LuaState, LuaVM {
   /// Asynchronously call an async Dart closure.
   Future<void> _callDartClosureAsync(int nArgs, int nResults, Closure c) async {
     // create new lua stack
-    LuaStack newStack = LuaStack();
+    LuaStack newStack = _newStack();
     newStack.state = this;
     newStack.closure = c;
 
