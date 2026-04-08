@@ -13,6 +13,18 @@ class StringLib {
   static final tagPattern =
       RegExp(r'%[ #+-0]?[0-9]*(\.[0-9]+)?[cdeEfgGioqsuxX%]');
 
+  /// Controls whether string.format uses optimised inline formatting.
+  ///
+  /// When `true` (default): caches parsed format strings and handles common
+  /// specifiers (%d, %s, %f, etc.) without calling the [sprintf] package.
+  /// When `false`: original behaviour (benchmark baseline).
+  static bool useFastFormat = true;
+
+  /// LRU-ish cache of parsed format strings.  Cleared when it exceeds 64
+  /// entries to avoid unbounded growth.
+  static final Map<String, List<String?>> _fmtCache = {};
+  static const int _fmtCacheMaxSize = 64;
+
   static const Map<String, DartFunction> _strLib = {
     "len": _strLen,
     "rep": _strRep,
@@ -508,6 +520,10 @@ class StringLib {
       return 1;
     }
 
+    if (useFastFormat) {
+      return _strFormatFast(ls, fmtStr);
+    }
+
     var argIdx = 1;
     var arr = parseFmtStr(fmtStr);
 
@@ -524,6 +540,118 @@ class StringLib {
 
     ls.pushString(arr.join());
     return 1;
+  }
+
+  /// Optimised string.format: caches the parsed template and avoids the
+  /// [sprintf] package for common specifiers.
+  static int _strFormatFast(LuaState ls, String fmtStr) {
+    // --- cached parse -------------------------------------------------------
+    var segments = _fmtCache[fmtStr];
+    if (segments == null) {
+      segments = parseFmtStr(fmtStr);
+      if (_fmtCache.length >= _fmtCacheMaxSize) _fmtCache.clear();
+      _fmtCache[fmtStr] = segments;
+    }
+
+    // --- format into StringBuffer -------------------------------------------
+    final buf = StringBuffer();
+    var argIdx = 1;
+
+    for (var i = 0; i < segments.length; i++) {
+      final seg = segments[i]!;
+      if (seg.isEmpty || seg[0] != '%') {
+        buf.write(seg);
+      } else if (seg == '%%') {
+        buf.write('%');
+      } else {
+        argIdx++;
+        buf.write(_fmtArgFast(seg, ls, argIdx));
+      }
+    }
+
+    ls.pushString(buf.toString());
+    return 1;
+  }
+
+  /// Formats a single argument, using inline fast paths for the most common
+  /// specifiers and falling back to [sprintf] for complex/rare ones.
+  static String? _fmtArgFast(String tag, LuaState ls, int argIdx) {
+    final spec = tag[tag.length - 1];
+
+    // --- fast path: bare %d / %i / %s / %c (length == 2, no flags/width) ----
+    if (tag.length == 2) {
+      switch (spec) {
+        case 'd': case 'i': case 'u':
+          return ls.toInteger(argIdx).toString();
+        case 's':
+          return ls.toString2(argIdx);
+        case 'c':
+          return String.fromCharCode(ls.toInteger(argIdx));
+        case 'f':
+          return ls.toNumber(argIdx).toStringAsFixed(6);
+      }
+    }
+
+    // --- fast path: integer with optional width/zero-pad --------------------
+    if (spec == 'd' || spec == 'i' || spec == 'u') {
+      final fast = _fastIntFormat(tag, ls.toInteger(argIdx));
+      if (fast != null) return fast;
+    }
+
+    // --- fallback to sprintf for everything else ----------------------------
+    return _fmtArg(tag, ls, argIdx);
+  }
+
+  /// Handles `%[flags][width]d` without [sprintf].
+  ///
+  /// Returns `null` if the format is too complex (precision, `+`, `#`, etc.)
+  /// and needs the full [sprintf] path.
+  static String? _fastIntFormat(String tag, int value) {
+    var i = 1; // skip %
+    final end = tag.length - 1; // before specifier char
+
+    var leftAlign = false;
+    var zeroPad = false;
+
+    // flags
+    while (i < end) {
+      final c = tag.codeUnitAt(i);
+      if (c == 0x2D /* - */) { leftAlign = true; i++; }
+      else if (c == 0x30 /* 0 */) { zeroPad = true; i++; }
+      else if (c == 0x20 || c == 0x2B || c == 0x23) { return null; } // ' +#'
+      else { break; }
+    }
+
+    // width
+    var width = 0;
+    while (i < end) {
+      final cu = tag.codeUnitAt(i);
+      if (cu >= 0x30 && cu <= 0x39) {
+        width = width * 10 + (cu - 0x30);
+        i++;
+      } else {
+        break;
+      }
+    }
+
+    // anything left (e.g. `.5d`) means precision → bail
+    if (i < end) return null;
+
+    var s = value.toString();
+
+    if (width > 0 && s.length < width) {
+      if (leftAlign) {
+        s = s.padRight(width);
+      } else if (zeroPad && value >= 0) {
+        s = s.padLeft(width, '0');
+      } else if (zeroPad /* && value < 0 */) {
+        s = '-${s.substring(1).padLeft(width - 1, '0')}';
+      } else {
+        s = s.padLeft(width);
+      }
+    }
+
+    return s;
   }
 
   static List<String?> parseFmtStr(String fmt) {
@@ -575,6 +703,8 @@ class StringLib {
     return buf.toString();
   }
 
+  /// Original _fmtArg — used by the legacy (non-fast) path and as a fallback
+  /// for specifiers that [_fmtArgFast] can't handle inline.
   static String? _fmtArg(String tag, LuaState ls, int argIdx) {
     switch (tag[tag.length - 1]) {
       // specifier
@@ -603,7 +733,7 @@ class StringLib {
       case 'q': // quoted string — Lua-specific escaping
         return _fmtQuoted(ls.toString2(argIdx) ?? 'nil');
       default:
-        throw Exception("todo! tag=" + tag);
+        throw Exception("todo! tag=$tag");
     }
   }
 
