@@ -84,4 +84,113 @@ void main() {
   test('lua OS standard library test', () {
     expect(testOS(), true);
   });
+
+  // ── wday: 1 = Sunday per Lua spec ──────────────────────────────────
+
+  test('os.date *t wday: Sunday is 1', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    // 2001-09-09 01:46:40 UTC was a Sunday
+    ls.loadString(r'return os.date("!*t", 1000000000).wday');
+    ls.call(0, 1);
+    expect(ls.toInteger(-1), equals(1));
+  });
+
+  test('os.date *t wday: Monday is 2', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    // 2001-09-10 01:46:40 UTC was a Monday
+    ls.loadString(r'return os.date("!*t", 1000086400).wday');
+    ls.call(0, 1);
+    expect(ls.toInteger(-1), equals(2));
+  });
+
+  test('os.date *t wday: Saturday is 7', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    // 2001-09-08 01:46:40 UTC was a Saturday
+    ls.loadString(r'return os.date("!*t", 999913600).wday');
+    ls.call(0, 1);
+    expect(ls.toInteger(-1), equals(7));
+  });
+
+  // ── %Y zero-padding ────────────────────────────────────────────────
+
+  test('os.date %Y pads year to 4 digits', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    // 1970-01-01 00:00:00 UTC → year "1970"
+    ls.loadString(r'return os.date("!%Y", 0)');
+    ls.call(0, 1);
+    expect(ls.toStr(-1), equals('1970'));
+  });
+
+  // ── %c (C-locale strftime format) ──────────────────────────────────
+
+  test('os.date %c produces strftime-style output', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    // 1000000000 = Sun Sep  9 01:46:40 2001 UTC
+    ls.loadString(r'return os.date("!%c", 1000000000)');
+    ls.call(0, 1);
+    var result = ls.toStr(-1)!;
+    expect(result, equals('Sun Sep 09 01:46:40 2001'));
+  });
+
+  test('os.date bare %c format (no other specifiers)', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return os.date("%c")');
+    ls.call(0, 1);
+    var result = ls.toStr(-1)!;
+    // Should look like "Mon Apr 14 15:30:00 2025", not Dart's toString()
+    expect(result, matches(RegExp(r'^[A-Z][a-z]{2} [A-Z][a-z]{2} \d{2} \d{2}:\d{2}:\d{2} \d{4}$')));
+  });
+
+  // ── %Z and %z (timezone specifiers) ────────────────────────────────
+
+  test('os.date !%Z returns UTC', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return os.date("!%Z", 0)');
+    ls.call(0, 1);
+    expect(ls.toStr(-1), equals('UTC'));
+  });
+
+  test('os.date !%z returns +0000', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return os.date("!%z", 0)');
+    ls.call(0, 1);
+    expect(ls.toStr(-1), equals('+0000'));
+  });
+
+  test('os.date %Z returns non-empty timezone name', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return os.date("%Z")');
+    ls.call(0, 1);
+    var result = ls.toStr(-1)!;
+    expect(result.length, greaterThan(0));
+    // Should not be the literal "%Z"
+    expect(result, isNot(equals('%Z')));
+  });
+
+  test('os.date %z returns numeric offset like +HHMM or -HHMM', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return os.date("%z")');
+    ls.call(0, 1);
+    var result = ls.toStr(-1)!;
+    expect(result, matches(RegExp(r'^[+-]\d{4}$')));
+  });
+
+  // ── os.time with bad args ──────────────────────────────────────────
+
+  test('os.time with non-table arg throws', () {
+    LuaState ls = LuaState.newState();
+    ls.openLibs();
+    ls.loadString(r'return os.time("hello")');
+    expect(() => ls.call(0, 1), throwsA(anything));
+  });
 }

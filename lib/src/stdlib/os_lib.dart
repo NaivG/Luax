@@ -113,10 +113,8 @@ class OSLib {
       _setField(ls, "day", t.day);
       _setField(ls, "month", t.month);
       _setField(ls, "year", t.year);
-      _setField(ls, "wday", t.weekday);
+      _setField(ls, "wday", t.weekday == 7 ? 1 : t.weekday + 1);
       _setField(ls, "yday", _getYearDay(t));
-    } else if (format == "%c") {
-      ls.pushString(t.toString());
     } else {
       ls.pushString(_strftime(format, t));
     }
@@ -149,7 +147,7 @@ class OSLib {
       if (fmt[i] == '%' && i + 1 < fmt.length) {
         i++;
         switch (fmt[i]) {
-          case 'Y': buf.write(t.year.toString()); break;
+          case 'Y': buf.write(t.year.toString().padLeft(4, '0')); break;
           case 'y': buf.write(_pad2(t.year % 100)); break;
           case 'm': buf.write(_pad2(t.month)); break;
           case 'd': buf.write(_pad2(t.day)); break;
@@ -164,9 +162,17 @@ class OSLib {
           case 'I': buf.write(_pad2(t.hour == 0 ? 12 : (t.hour > 12 ? t.hour - 12 : t.hour))); break;
           case 'j': buf.write(_getYearDay(t).toString().padLeft(3, '0')); break;
           case 'w': buf.write((t.weekday % 7).toString()); break; // 0=Sunday
-          case 'c': buf.write(t.toString()); break;
+          case 'c': buf.write(_strftime('%a %b %d %H:%M:%S %Y', t)); break;
           case 'x': buf.write('${_pad2(t.month)}/${_pad2(t.day)}/${_pad2(t.year % 100)}'); break;
           case 'X': buf.write('${_pad2(t.hour)}:${_pad2(t.minute)}:${_pad2(t.second)}'); break;
+          case 'Z': buf.write(t.timeZoneName); break;
+          case 'z':
+            final off = t.timeZoneOffset;
+            final sign = off.isNegative ? '-' : '+';
+            buf.write(
+              '$sign${off.inHours.abs().toString().padLeft(2, '0')}'
+              '${(off.inMinutes.abs() % 60).toString().padLeft(2, '0')}');
+            break;
           case '%': buf.write('%'); break;
           case 'n': buf.write('\n'); break;
           case 't': buf.write('\t'); break;
