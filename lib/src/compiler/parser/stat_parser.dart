@@ -8,6 +8,10 @@ import 'exp_parser.dart';
 import 'prefix_exp_parser.dart';
 
 class StatParser {
+  /// Select between the original and the tuned implementation. Kept as a
+  /// runtime flag so `test/perf/stat_parser_perf_test.dart` can A/B them.
+  /// Defaults to the tuned path; flip to `false` to restore the original.
+  static bool useOptimized = true;
 
   /*
     stat ::=  ‘;’
@@ -105,13 +109,17 @@ class StatParser {
 
   // if exp then block {elseif exp then block} [else block] end
    static IfStat parseIfStat(Lexer lexer) {
-    List<Exp> exps = <Exp>[];
-    List<Block> blocks = <Block>[];
+    lexer.nextTokenOfKind(TokenKind.TOKEN_KW_IF);         // if
+    final firstExp = ExpParser.parseExp(lexer);           // exp
+    lexer.nextTokenOfKind(TokenKind.TOKEN_KW_THEN);       // then
+    final firstBlock = BlockParser.parseBlock(lexer);     // block
 
-    lexer.nextTokenOfKind(TokenKind.TOKEN_KW_IF);       // if
-    exps.add(ExpParser.parseExp(lexer));                // exp
-    lexer.nextTokenOfKind(TokenKind.TOKEN_KW_THEN);     // then
-    blocks.add(BlockParser.parseBlock(lexer));            // block
+    // Opt: pre-size the lists with the mandatory first branch so we
+    // skip one grow-and-add per if-stat. Most ifs have 1–3 branches
+    // total.
+    final List<Exp> exps = useOptimized ? <Exp>[firstExp] : (<Exp>[]..add(firstExp));
+    final List<Block> blocks =
+        useOptimized ? <Block>[firstBlock] : (<Block>[]..add(firstBlock));
 
     while (lexer.LookAhead() == TokenKind.TOKEN_KW_ELSEIF) {
       lexer.nextToken();                    // elseif
@@ -193,8 +201,11 @@ class StatParser {
 
   // namelist ::= Name {‘,’ Name}
    static List<String> finishNameList(Lexer lexer, String name0) {
-    List<String> names = <String>[];
-    names.add(name0);
+    // Opt: start the list pre-populated so we save one `add()` call per
+    // namelist. For `local x` (no comma) this is the entire savings;
+    // for `local x, y` it's still a win.
+    final List<String> names =
+        useOptimized ? <String>[name0] : (<String>[]..add(name0));
     while (lexer.LookAhead() == TokenKind.TOKEN_SEP_COMMA) {
       lexer.nextToken();                            // ,
       names.add(lexer.nextIdentifier().value); // Name
@@ -245,7 +256,11 @@ class StatParser {
       expList = ExpParser.parseExpList(lexer);                    // explist
     }
     int lastLine = lexer.line;
-    return LocalVarDeclStat(lastLine, nameList, expList ?? List<Exp>.empty());
+    // Opt: reuse a canonical empty list rather than allocating via
+    // `List<Exp>.empty()` on every `local x` without initializer.
+    // `parseRetExps` in block_parser.dart already does this.
+    final fallback = useOptimized ? const <Exp>[] : List<Exp>.empty();
+    return LocalVarDeclStat(lastLine, nameList, expList ?? fallback);
   }
 
   // varlist ‘=’ explist
@@ -270,8 +285,12 @@ class StatParser {
 
   // varlist ::= var {‘,’ var}
    static List<Exp> finishVarList(Lexer lexer, Exp var0) {
-    List<Exp> vars = <Exp>[];
-    vars.add(checkVar(lexer, var0));               // var
+    // Opt: single-var assignments (`x = y`, far the most common) benefit
+    // from a pre-sized list of length 1 — no grow-and-add, just a
+    // literal allocation.
+    final checked = checkVar(lexer, var0);
+    final List<Exp> vars =
+        useOptimized ? <Exp>[checked] : (<Exp>[]..add(checked));
     while (lexer.LookAhead() == TokenKind.TOKEN_SEP_COMMA) { // {
       lexer.nextToken();                         // ,
       Exp exp = PrefixExpParser.parsePrefixExp(lexer);           // var
@@ -296,9 +315,17 @@ class StatParser {
   // namelist ::= Name {‘,’ Name}
    static AssignStat parseFuncDefStat(Lexer lexer) {
     lexer.nextTokenOfKind(TokenKind.TOKEN_KW_FUNCTION);     // function
-    Map<Exp, bool> map = parseFuncName(lexer); // funcname
-    Exp fnExp = map.keys.first;
-    bool hasColon = map.values.first;
+    final Exp fnExp;
+    final bool hasColon;
+    if (useOptimized) {
+      final (e, hc) = _parseFuncNameFast(lexer);
+      fnExp = e;
+      hasColon = hc;
+    } else {
+      final map = parseFuncName(lexer); // funcname (legacy path)
+      fnExp = map.keys.first;
+      hasColon = map.values.first;
+    }
     FuncDefExp fdExp = ExpParser.parseFuncDefExp(lexer);    // funcbody
     if (hasColon) { // insert self
       fdExp.parList.insert(0, "self");
@@ -308,6 +335,9 @@ class StatParser {
   }
 
   // funcname ::= Name {‘.’ Name} [‘:’ Name]
+  //
+  // Legacy path: returned a single-entry HashMap so the caller could
+  // pull out both values. See [_parseFuncNameFast] for the tuned path.
    static Map<Exp, bool> parseFuncName(Lexer lexer) {
     Token id = lexer.nextIdentifier();
     Exp exp = NameExp(id.line, id.value);
@@ -329,6 +359,30 @@ class StatParser {
 
     // workaround: return multiple values
     return Map<Exp, bool>()..[exp] = hasColon;
+  }
+
+  /// Tuned alternative for [parseFuncName]: returns a 2-tuple record
+  /// instead of allocating a HashMap per function definition.
+  static (Exp, bool) _parseFuncNameFast(Lexer lexer) {
+    Token id = lexer.nextIdentifier();
+    Exp exp = NameExp(id.line, id.value);
+    bool hasColon = false;
+
+    while (lexer.LookAhead() == TokenKind.TOKEN_SEP_DOT) {
+      lexer.nextToken();
+      id = lexer.nextIdentifier();
+      Exp idx = StringExp.fromToken(id);
+      exp = TableAccessExp(id.line, exp, idx);
+    }
+    if (lexer.LookAhead() == TokenKind.TOKEN_SEP_COLON) {
+      lexer.nextToken();
+      id = lexer.nextIdentifier();
+      Exp idx = StringExp.fromToken(id);
+      exp = TableAccessExp(id.line, exp, idx);
+      hasColon = true;
+    }
+
+    return (exp, hasColon);
   }
 
 }
