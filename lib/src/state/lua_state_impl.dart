@@ -1861,7 +1861,12 @@ class LuaStateImpl implements LuaState, LuaVM {
     int level = 0;
     while (stack != null) {
       if (stack.closure != null) {
-        String funcName = stack.closure!.proto?.source ?? '<dart function>';
+        final rawSource = stack.closure!.proto?.source;
+        // Apply luaO_chunkid-style truncation so frame labels don't embed
+        // the entire script source (e.g. for chunks loaded via loadString).
+        final funcName = rawSource == null
+            ? '<dart function>'
+            : LuaStack.chunkid(rawSource);
         int line = stack.pc > 0 && stack.closure!.proto != null
             ? (stack.closure!.proto!.lineInfo.isNotEmpty
                 ? stack.closure!.proto!.lineInfo[stack.pc - 1]
