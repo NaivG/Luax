@@ -264,10 +264,58 @@ class LuaStack {
     return closure?.proto?.source;
   }
 
+  /// Port of reference Lua 5.3's `luaO_chunkid` (lobject.c). The raw
+  /// `source` attached to a prototype can be:
+  ///   - `=<name>` — literal short name; strip the `=` and hard-truncate.
+  ///   - `@<path>` — a file path; strip the `@`, and if too long, show the
+  ///     tail with a leading `...`.
+  ///   - otherwise — an actual chunk of source code (this is what
+  ///     `loadString` installs when no explicit name is given). Format as
+  ///     `[string "<first line, truncated>..."]` so error messages don't
+  ///     drag in the entire script.
+  ///
+  /// [bufflen] matches C's `LUA_IDSIZE` (default 60), which is the size of
+  /// the output buffer *including* the trailing NUL in C. We don't NUL-
+  /// terminate in Dart, but we preserve the same effective truncation
+  /// thresholds so output matches the reference implementation.
+  static String chunkid(String source, {int bufflen = 60}) {
+    if (source.isEmpty) return '?';
+    final l = source.length;
+    final first = source.codeUnitAt(0);
+    if (first == 0x3D /* '=' */) {
+      // `=literal`: strip the '='. If it fits in the buffer, keep as-is;
+      // else take `bufflen - 1` chars (C reserves one slot for NUL).
+      final s = source.substring(1);
+      return l <= bufflen ? s : s.substring(0, bufflen - 1);
+    }
+    if (first == 0x40 /* '@' */) {
+      // `@path`: strip the '@'. If it fits, keep as-is; else prepend '...'
+      // and keep the tail that fits in `bufflen - LL("...")`.
+      final s = source.substring(1);
+      if (l <= bufflen) return s;
+      final keep = bufflen - 3; // LL(RETS)
+      return '...${s.substring(s.length - keep)}';
+    }
+    // String source: format as `[string "<inner>"]`, with `<inner>` being
+    // the first line clamped to `bufflen - LL(PRE RETS POS) - 1`
+    // ( = bufflen - (10 + 3 + 2) - 1 = bufflen - 16 with default 60 ).
+    final nl = source.indexOf('\n');
+    var inner = bufflen - 16; // LL(PRE) + LL(RETS) + LL(POS) + 1
+    if (inner < 0) inner = 0;
+    if (l < inner && nl < 0) {
+      // Short, single-line source: keep it verbatim.
+      return '[string "$source"]';
+    }
+    var cut = (nl >= 0) ? nl : l;
+    if (cut > inner) cut = inner;
+    return '[string "${source.substring(0, cut)}..."]';
+  }
+
   /// Fix #33: Format error message with line number
   String formatError(String message) {
     final line = getCurrentLine();
-    final source = getSource() ?? 'unknown';
+    final rawSource = getSource();
+    final source = rawSource == null ? 'unknown' : chunkid(rawSource);
     if (line != null) {
       return '[$source:$line] $message';
     }
