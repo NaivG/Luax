@@ -8,6 +8,7 @@ import '../api/lua_type.dart';
 import '../binchunk/binary_chunk.dart';
 import '../state/closure.dart';
 import '../state/lua_state_impl.dart';
+import 'lua_pattern.dart';
 
 class StringLib {
   static final tagPattern =
@@ -755,76 +756,66 @@ class StringLib {
     }
     var plain = ls.toBoolean(4);
 
-    var tail = s;
-    if (init > 1) {
-      tail = s.substring(init - 1);
-    }
-
     if (plain) {
-      var idx = tail.indexOf(pattern);
+      final idx = s.indexOf(pattern, init - 1);
       if (idx < 0) {
         ls.pushNil();
         return 1;
       }
-      var start = idx + s.length - tail.length + 1;
-      var end = start + pattern.length - 1;
-      ls.pushInteger(start);
-      ls.pushInteger(end);
+      ls.pushInteger(idx + 1);
+      ls.pushInteger(idx + pattern.length);
       return 2;
     }
 
-    var regex = RegExp(luaPatternToRegex(pattern), dotAll: true);
-    var m = regex.firstMatch(tail);
+    final m = LuaPattern.match(s, pattern, init - 1);
     if (m == null) {
       ls.pushNil();
       return 1;
     }
-
-    var offset = s.length - tail.length;
-    var start = m.start + offset + 1; // 1-based
-    var end = m.start + m.group(0)!.length + offset; // 1-based inclusive
-    ls.pushInteger(start);
-    ls.pushInteger(end);
-
-    // Push capture groups if any.
-    for (var i = 1; i <= m.groupCount; i++) {
-      ls.pushString(m.group(i));
-    }
-    return 2 + m.groupCount;
+    ls.pushInteger(m.start + 1);
+    ls.pushInteger(m.end);
+    _pushCaptures(ls, m);
+    return 2 + m.captures.length;
   }
 
   static List<int?> find(String s, String pattern, int init, bool plain) {
-    var tail = s;
-    if (init > 1) {
-      tail = s.substring(init - 1);
-    }
-
+    final startOffset = init > 1 ? init - 1 : 0;
     int start;
     int matchLen;
     if (plain) {
-      start = tail.indexOf(pattern);
+      start = s.indexOf(pattern, startOffset);
       matchLen = pattern.length;
     } else {
-      var regex = RegExp(luaPatternToRegex(pattern), dotAll: true);
-      var m = regex.firstMatch(tail);
+      final m = LuaPattern.match(s, pattern, startOffset);
       if (m != null) {
         start = m.start;
-        matchLen = m.group(0)!.length;
+        matchLen = m.end - m.start;
       } else {
         start = -1;
         matchLen = 0;
       }
     }
-    var end = start + matchLen - 1;
-
+    final end = start + matchLen - 1;
     if (start >= 0) {
-      start += s.length - tail.length + 1;
-      end += s.length - tail.length + 1;
+      return List<int?>.filled(2, null)
+        ..[0] = start + 1
+        ..[1] = end + 1;
     }
-
-    return List<int?>.filled(2,null)
+    return List<int?>.filled(2, null)
       ..[0] = start
       ..[1] = end;
+  }
+
+  /// Push each capture in [m] onto [ls]: strings as strings, position
+  /// captures as integers (per Lua 5.3 semantics).
+  static void _pushCaptures(LuaState ls, LuaPatternMatch m) {
+    for (final c in m.captures) {
+      if (c is StringCapture) {
+        ls.pushString(c.value);
+      } else if (c is PositionCapture) {
+        ls.pushInteger(c.position);
+      }
+    }
   }
 
 // string.match (s, pattern [, init])
@@ -832,7 +823,7 @@ class StringLib {
   static int _strMatch(LuaState ls) {
     var s = ls.checkString(1)!;
     var sLen = s.length;
-    var pattern = ls.checkString(2);
+    var pattern = ls.checkString(2)!;
     var init = posRelat(ls.optInteger(3, 1)!, sLen);
     if (init < 1) {
       init = 1;
@@ -842,431 +833,195 @@ class StringLib {
       return 1;
     }
 
-    var captures = match(s, pattern!, init);
-
-    if (captures == null || captures.isEmpty) {
+    final m = LuaPattern.match(s, pattern, init - 1);
+    if (m == null) {
       ls.pushNil();
       return 1;
-    } else {
-      for (var s in captures) {
-        ls.pushString(s);
-      }
-      return captures.length;
     }
+    if (m.captures.isEmpty) {
+      // No explicit captures: push whole match.
+      ls.pushString(s.substring(m.start, m.end));
+      return 1;
+    }
+    _pushCaptures(ls, m);
+    return m.captures.length;
   }
 
+  /// Back-compat Dart helper. Returns captures as strings (position captures
+  /// are stringified — the old API had no way to represent them). Returns
+  /// `null` on no match; a single-element list with the whole match when the
+  /// pattern has no capture groups.
   static List<String?>? match(String? s, String pattern, int init) {
-    var tail = s;
-    if (init > 1) {
-      tail = s!.substring(init - 1);
+    if (s == null) return null;
+    final m = LuaPattern.match(s, pattern, init > 1 ? init - 1 : 0);
+    if (m == null) return null;
+    if (m.captures.isEmpty) {
+      return [s.substring(m.start, m.end)];
     }
-
-    var regExpMatch = RegExp(luaPatternToRegex(pattern), dotAll: true).firstMatch(tail!);
-    if (regExpMatch == null) return null;
-
-    // If the pattern has capture groups, return those; otherwise return the
-    // full match (group 0).  This matches Lua 5.3 semantics.
-    if (regExpMatch.groupCount > 0) {
-      var captures = <String?>[];
-      for (var i = 1; i <= regExpMatch.groupCount; i++) {
-        captures.add(regExpMatch.group(i));
-      }
-      return captures;
-    }
-    return [regExpMatch.group(0)];
+    return [
+      for (final c in m.captures)
+        if (c is StringCapture) c.value else (c as PositionCapture).position.toString(),
+    ];
   }
 
 // string.gsub (s, pattern, repl [, n])
 // http://www.lua.org/manual/5.3/manual.html#pdf-string.gsub
   static int _strGsub(LuaState ls) {
-    var s = ls.checkString(1)!;
-    var pattern = ls.checkString(2)!;
-    // repl can be string, function, or table (arg 3)
-    var replType = ls.type(3);
-    var n = ls.optInteger(4, -1)!;
+    final s = ls.checkString(1)!;
+    final pattern = ls.checkString(2)!;
+    final replType = ls.type(3);
+    final n = ls.optInteger(4, -1)!;
 
     if (replType == LuaType.luaString) {
-      var repl = ls.checkString(3);
-      var r = gsub(s, pattern, repl, n);
+      final repl = ls.checkString(3);
+      final r = gsub(s, pattern, repl, n);
       ls.pushString(r[0]);
       ls.pushInteger(r[1]);
       return 2;
     }
 
-    // Function or table replacement: iterate matches manually.
-    var regex = RegExp(luaPatternToRegex(pattern), dotAll: true);
-    var buf = StringBuffer();
-    var count = 0;
-    var lastEnd = 0;
-
-    for (var m in regex.allMatches(s)) {
-      if (n >= 0 && count >= n) break;
-      count++;
-
-      buf.write(s.substring(lastEnd, m.start));
-
-      // Determine the key to query: first capture group, or whole match.
-      String key = (m.groupCount > 0) ? (m.group(1) ?? '') : m.group(0)!;
-
-      if (replType == LuaType.luaFunction) {
-        ls.pushValue(3); // push the function
-        // Push captures as args (or whole match if no captures)
-        if (m.groupCount > 0) {
-          for (var i = 1; i <= m.groupCount; i++) {
-            ls.pushString(m.group(i));
-          }
-          ls.call(m.groupCount, 1);
-        } else {
-          ls.pushString(m.group(0));
-          ls.call(1, 1);
-        }
-        // If result is false or nil, keep original match
-        if (ls.isNil(-1) || (ls.type(-1) == LuaType.luaBoolean && !ls.toBoolean(-1))) {
-          buf.write(m.group(0)!);
-        } else {
-          buf.write(ls.toStr(-1) ?? m.group(0)!);
-        }
-        ls.pop(1);
-      } else if (replType == LuaType.luaTable) {
-        ls.pushValue(3); // push the table
-        ls.pushString(key);
-        ls.getTable(-2);
-        // If result is false or nil, keep original match
-        if (ls.isNil(-1) || (ls.type(-1) == LuaType.luaBoolean && !ls.toBoolean(-1))) {
-          buf.write(m.group(0)!);
-        } else {
-          buf.write(ls.toStr(-1) ?? m.group(0)!);
-        }
-        ls.pop(2); // pop result and table
-      } else {
-        return ls.error2("string/function/table expected");
-      }
-
-      lastEnd = m.end;
+    if (replType != LuaType.luaFunction && replType != LuaType.luaTable) {
+      return ls.error2('string/function/table expected');
     }
 
+    final buf = StringBuffer();
+    var count = 0;
+    var lastEnd = 0;
+    for (final m in LuaPattern.allMatches(s, pattern)) {
+      if (n >= 0 && count >= n) break;
+      count++;
+      buf.write(s.substring(lastEnd, m.start));
+
+      // Determine the key/first-arg: first capture if present, else whole
+      // match. Function replacement receives all captures (or the whole
+      // match if the pattern has none).
+      final wholeMatch = s.substring(m.start, m.end);
+      if (replType == LuaType.luaFunction) {
+        ls.pushValue(3);
+        final nArgs = m.captures.isEmpty ? 1 : m.captures.length;
+        if (m.captures.isEmpty) {
+          ls.pushString(wholeMatch);
+        } else {
+          _pushCaptures(ls, m);
+        }
+        ls.call(nArgs, 1);
+      } else {
+        ls.pushValue(3);
+        if (m.captures.isEmpty) {
+          ls.pushString(wholeMatch);
+        } else {
+          final first = m.captures.first;
+          if (first is StringCapture) {
+            ls.pushString(first.value);
+          } else {
+            ls.pushInteger((first as PositionCapture).position);
+          }
+        }
+        ls.getTable(-2);
+      }
+
+      // If result is nil/false, keep original match per Lua 5.3 semantics.
+      if (ls.isNil(-1) ||
+          (ls.type(-1) == LuaType.luaBoolean && !ls.toBoolean(-1))) {
+        buf.write(wholeMatch);
+      } else {
+        final resultStr = ls.toStr(-1);
+        if (resultStr == null) {
+          return ls.error2(
+              'invalid replacement value (a ${ls.typeName(ls.type(-1))})');
+        }
+        buf.write(resultStr);
+      }
+      ls.pop(replType == LuaType.luaFunction ? 1 : 2);
+      lastEnd = m.end;
+    }
     buf.write(s.substring(lastEnd));
     ls.pushString(buf.toString());
     ls.pushInteger(count);
     return 2;
   }
 
-  /// Expand Lua-style back-references (%0, %1, %2, ...) in [repl]
-  /// using capture groups from [match].
-  static String _expandRepl(String repl, Match match) {
+  /// Expand Lua-style back-references (%0, %1 … %9, %%) in [repl] using
+  /// [m].
+  static String _expandRepl(String repl, String src, LuaPatternMatch m) {
     final buf = StringBuffer();
     for (var i = 0; i < repl.length; i++) {
-      if (repl[i] == '%' && i + 1 < repl.length) {
-        final next = repl[i + 1];
-        if (next == '%') {
+      final ch = repl[i];
+      if (ch == '%' && i + 1 < repl.length) {
+        final nxt = repl.codeUnitAt(i + 1);
+        if (nxt == 0x25 /* '%' */) {
           buf.write('%');
           i++;
-        } else if (next.codeUnitAt(0) >= 48 /* '0' */ &&
-            next.codeUnitAt(0) <= 57 /* '9' */) {
-          final idx = next.codeUnitAt(0) - 48;
+        } else if (nxt >= 0x30 /* '0' */ && nxt <= 0x39 /* '9' */) {
+          final idx = nxt - 0x30;
           if (idx == 0) {
-            buf.write(match.group(0) ?? '');
-          } else if (idx <= match.groupCount) {
-            buf.write(match.group(idx) ?? '');
+            buf.write(src.substring(m.start, m.end));
+          } else if (idx <= m.captures.length) {
+            final c = m.captures[idx - 1];
+            if (c is StringCapture) {
+              buf.write(c.value);
+            } else {
+              buf.write((c as PositionCapture).position);
+            }
+          } else if (idx == 1 && m.captures.isEmpty) {
+            // Lua allows %1 with a pattern that has no captures to mean the
+            // whole match.
+            buf.write(src.substring(m.start, m.end));
+          } else {
+            throw LuaPatternError(
+                'invalid capture index %$idx in replacement string');
           }
           i++;
         } else {
-          buf.write(repl[i]);
+          throw LuaPatternError(
+              "invalid use of '%' in replacement string");
         }
       } else {
-        buf.write(repl[i]);
+        buf.write(ch);
       }
     }
     return buf.toString();
   }
 
-  // Fix #13: Rewrite gsub to properly handle replacements
+  /// String-replacement gsub. Returns `[result, count]`.
   static List<dynamic> gsub(String? s, String pattern, String? repl, int n) {
-    if (s == null) {
-      return ['', 0];
-    }
-
-    final regExp = RegExp(luaPatternToRegex(pattern), dotAll: true);
+    if (s == null) return ['', 0];
+    if (n == 0) return [s, 0];
     final replacement = repl ?? '';
-    int nMatches = 0;
-
-    if (n == 0) {
-      return [s, 0];
-    }
-
-    int count = 0;
-    final result = s.replaceAllMapped(regExp, (match) {
-      if (n >= 0 && count >= n) {
-        return match.group(0)!;
-      }
+    final buf = StringBuffer();
+    var count = 0;
+    var lastEnd = 0;
+    for (final m in LuaPattern.allMatches(s, pattern)) {
+      if (n >= 0 && count >= n) break;
       count++;
-      return _expandRepl(replacement, match);
-    });
-    nMatches = count;
-
-    return [result, nMatches];
+      buf.write(s.substring(lastEnd, m.start));
+      buf.write(_expandRepl(replacement, s, m));
+      lastEnd = m.end;
+    }
+    buf.write(s.substring(lastEnd));
+    return [buf.toString(), count];
   }
 
 // string.gmatch (s, pattern)
 // http://www.lua.org/manual/5.3/manual.html#pdf-string.gmatch
   static int _strGmatch(LuaState ls) {
-    var s = ls.checkString(1)!;
-    var pattern = ls.checkString(2)!;
-    var regex = RegExp(luaPatternToRegex(pattern), dotAll: true);
-    var offset = 0;
-    // If pattern is anchored with ^, only match at the start (offset 0).
-    var anchoredStart = pattern.startsWith('^');
+    final s = ls.checkString(1)!;
+    final pattern = ls.checkString(2)!;
+    final iter = LuaPattern.allMatches(s, pattern).iterator;
 
     int gmatchAux(LuaState ls) {
-      while (offset <= s.length) {
-        // For ^-anchored patterns, only attempt at offset 0.
-        if (anchoredStart && offset > 0) return 0;
-
-        var tail = s.substring(offset);
-        var m = regex.firstMatch(tail);
-        if (m == null) return 0;
-
-        // Advance past this match; if empty match, advance by 1 to avoid
-        // infinite loop.
-        var matchEnd = offset + m.end;
-        if (m.end == m.start) {
-          offset = matchEnd + 1;
-        } else {
-          offset = matchEnd;
-        }
-
-        // If pattern has capture groups, return those; otherwise full match.
-        if (m.groupCount > 0) {
-          for (var i = 1; i <= m.groupCount; i++) {
-            ls.pushString(m.group(i));
-          }
-          return m.groupCount;
-        } else {
-          ls.pushString(m.group(0));
-          return 1;
-        }
+      if (!iter.moveNext()) return 0;
+      final m = iter.current;
+      if (m.captures.isEmpty) {
+        ls.pushString(s.substring(m.start, m.end));
+        return 1;
       }
-      return 0;
+      _pushCaptures(ls, m);
+      return m.captures.length;
     }
 
     ls.pushDartFunction(gmatchAux);
     return 1;
-  }
-
-/* helper */
-
-  /// Lua character class `%x` → Dart regex equivalent.
-  static String? _luaClassToRegex(String c) {
-    switch (c) {
-      case 'a': return '[a-zA-Z]';
-      case 'A': return '[^a-zA-Z]';
-      case 'd': return r'\d';
-      case 'D': return r'\D';
-      case 'l': return '[a-z]';
-      case 'L': return '[^a-z]';
-      case 'u': return '[A-Z]';
-      case 'U': return '[^A-Z]';
-      case 'w': return '[a-zA-Z0-9]';
-      case 'W': return '[^a-zA-Z0-9]';
-      case 's': return r'\s';
-      case 'S': return r'\S';
-      case 'p': return r'[^\w\s]';
-      case 'P': return r'[\w\s]';
-      case 'x': return '[0-9a-fA-F]';
-      case 'X': return '[^0-9a-fA-F]';
-      case 'c': return '[\x00-\x1f\x7f]';
-      case 'C': return '[^\x00-\x1f\x7f]';
-      default:  return null;
-    }
-  }
-
-  /// Like [_luaClassToRegex] but returns the *inner* content suitable for
-  /// embedding inside an existing `[...]` character class.  Strips outer
-  /// brackets so we don't produce nested `[[...]]` which breaks the regex.
-  static String? _luaClassToRegexInBracket(String c) {
-    switch (c) {
-      case 'a': return 'a-zA-Z';
-      case 'A': return '^a-zA-Z';
-      case 'd': return '0-9';
-      case 'D': return '^0-9';
-      case 'l': return 'a-z';
-      case 'L': return '^a-z';
-      case 'u': return 'A-Z';
-      case 'U': return '^A-Z';
-      case 'w': return 'a-zA-Z0-9';
-      case 'W': return '^a-zA-Z0-9';
-      case 's': return r'\s';
-      case 'S': return r'\S';
-      case 'p': return r'^\w\s';
-      case 'P': return r'\w\s';
-      case 'x': return '0-9a-fA-F';
-      case 'X': return '^0-9a-fA-F';
-      case 'c': return '\x00-\x1f\x7f';
-      case 'C': return '^\x00-\x1f\x7f';
-      default:  return null;
-    }
-  }
-
-  // Characters that are regex metacharacters but plain literals in Lua.
-  // We must escape them when they appear unescaped outside brackets.
-  static const _regexMetaChars = <String>{'\\', '|', '{', '}'};
-
-  /// Convert a Lua pattern string to a Dart [RegExp] pattern.
-  ///
-  /// The returned pattern should be compiled with `dotAll: true` so that `.`
-  /// matches every character including newline (Lua semantics).
-  static String luaPatternToRegex(String pat) {
-    final buf = StringBuffer();
-    final len = pat.length;
-    var i = 0;
-    var inBracket = false;
-    // Track whether the previous *logical item* can accept a quantifier.
-    // This is used to decide if `-` is a lazy quantifier or literal.
-    var prevIsQuantifiable = false;
-
-    while (i < len) {
-      final c = pat[i];
-
-      // --- %escape ---
-      if (c == '%' && i + 1 < len) {
-        final next = pat[i + 1];
-        if (next == '%') {
-          buf.write('%');
-        } else if (inBracket) {
-          // Inside [...], use the bracket-safe (unwrapped) form of classes.
-          final cls = _luaClassToRegexInBracket(next);
-          if (cls != null) {
-            buf.write(cls);
-          } else {
-            // Escaped literal (e.g. %-  %]  %[) — write as regex escape.
-            buf.write('\\');
-            buf.write(next);
-          }
-        } else {
-          final cls = _luaClassToRegex(next);
-          if (cls != null) {
-            buf.write(cls);
-          } else {
-            buf.write('\\');
-            buf.write(next);
-          }
-        }
-        i += 2;
-        prevIsQuantifiable = !inBracket;
-        continue;
-      }
-
-      // --- bracket open ---
-      if (c == '[' && !inBracket) {
-        inBracket = true;
-        buf.write(c);
-        i++;
-        // Handle ^ right after [ for negated set.
-        if (i < len && pat[i] == '^') {
-          buf.write('^');
-          i++;
-        }
-        // In Lua, ] immediately after [ or [^ is a literal member.
-        if (i < len && pat[i] == ']') {
-          buf.write('\\]');
-          i++;
-        }
-        prevIsQuantifiable = false;
-        continue;
-      }
-      // --- bracket close ---
-      if (c == ']' && inBracket) {
-        inBracket = false;
-        buf.write(c);
-        i++;
-        prevIsQuantifiable = true;
-        continue;
-      }
-
-      // Inside a bracket set, most characters are literal (except % handled
-      // above).  Just pass them through.
-      if (inBracket) {
-        buf.write(c);
-        i++;
-        continue;
-      }
-
-      // --- From here on we are outside brackets. ---
-
-      // Lua `-` as lazy (non-greedy) quantifier: 0 or more, shortest match.
-      // It applies after any quantifiable item.  Otherwise it's a literal.
-      if (c == '-' && prevIsQuantifiable && i + 1 < len) {
-        buf.write('*?');
-        i++;
-        prevIsQuantifiable = false;
-        continue;
-      }
-
-      // `^` is an anchor only at the very start of the pattern.
-      if (c == '^') {
-        if (i == 0) {
-          buf.write('^');
-        } else {
-          buf.write('\\^');
-        }
-        i++;
-        prevIsQuantifiable = false;
-        continue;
-      }
-
-      // `$` is an anchor only at the very end of the pattern.
-      if (c == r'$') {
-        if (i == len - 1) {
-          buf.write(r'$');
-        } else {
-          buf.write(r'\$');
-        }
-        i++;
-        prevIsQuantifiable = false;
-        continue;
-      }
-
-      // Quantifiers: +  *  ?  — pass through (regex semantics match Lua).
-      if (c == '+' || c == '*' || c == '?') {
-        buf.write(c);
-        i++;
-        prevIsQuantifiable = false;
-        continue;
-      }
-
-      // Capture parens — pass through.  In Lua, capture groups are NOT
-      // repeatable items, so `-` / `*` / `+` / `?` after `)` is literal.
-      if (c == '(' || c == ')') {
-        buf.write(c);
-        i++;
-        prevIsQuantifiable = false;
-        continue;
-      }
-
-      // `.` matches any character (including newline via dotAll flag).
-      if (c == '.') {
-        buf.write('.');
-        i++;
-        prevIsQuantifiable = true;
-        continue;
-      }
-
-      // Regex metacharacters that are literal in Lua: \ | { }
-      if (_regexMetaChars.contains(c)) {
-        buf.write('\\');
-        buf.write(c);
-        i++;
-        prevIsQuantifiable = true;
-        continue;
-      }
-
-      // Ordinary literal character.
-      buf.write(c);
-      i++;
-      prevIsQuantifiable = true;
-    }
-
-    return buf.toString();
   }
 
 /* translate a relative string position: negative means back from end */
