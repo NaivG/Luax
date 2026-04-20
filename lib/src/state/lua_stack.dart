@@ -311,14 +311,53 @@ class LuaStack {
     return '[string "${source.substring(0, cut)}..."]';
   }
 
-  /// Fix #33: Format error message with line number
+  /// If [rawSource] is an inline chunk of Lua source (i.e. not `=name`
+  /// or `@path`), return the trimmed text of [line] (1-based). Otherwise
+  /// return null. Used to enrich runtime error messages with the actual
+  /// offending source line — something reference Lua can't do because
+  /// its `proto.source` is typically just `@filename`, but we have the
+  /// full source in-memory for `loadString` chunks.
+  static String? sourceLine(String? rawSource, int line) {
+    if (rawSource == null || rawSource.isEmpty || line <= 0) return null;
+    final first = rawSource.codeUnitAt(0);
+    if (first == 0x3D /* = */ || first == 0x40 /* @ */) return null;
+    // Split lazily: scan for the (line-1)'th newline.
+    var start = 0;
+    var remaining = line - 1;
+    while (remaining > 0) {
+      final nl = rawSource.indexOf('\n', start);
+      if (nl < 0) return null;
+      start = nl + 1;
+      remaining--;
+    }
+    final nl = rawSource.indexOf('\n', start);
+    final end = nl < 0 ? rawSource.length : nl;
+    final text = rawSource.substring(start, end).trim();
+    return text.isEmpty ? null : text;
+  }
+
+  /// Fix #33: Format error message with line number.
+  ///
+  /// When the chunk's source is an inline string (typical for
+  /// `loadString`), also append the offending source line so the user
+  /// doesn't have to count lines by hand:
+  ///
+  ///   [string "..."]:103: attempt to index a nil value
+  ///     > local day_len_sec = s.day_length or 0
   String formatError(String message) {
     final line = getCurrentLine();
     final rawSource = getSource();
     final source = rawSource == null ? 'unknown' : chunkid(rawSource);
-    if (line != null) {
-      return '[$source:$line] $message';
-    }
-    return '[$source] $message';
+    final prefix =
+        line != null ? '[$source:$line] $message' : '[$source] $message';
+    if (line == null) return prefix;
+    final snippet = sourceLine(rawSource, line);
+    if (snippet == null) return prefix;
+    // Clamp extremely long lines so the message stays readable.
+    const maxSnippet = 200;
+    final shown = snippet.length <= maxSnippet
+        ? snippet
+        : '${snippet.substring(0, maxSnippet)}...';
+    return '$prefix\n  > $shown';
   }
 }

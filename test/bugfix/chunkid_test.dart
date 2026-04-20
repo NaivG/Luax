@@ -58,6 +58,40 @@ void main() {
     });
   });
 
+  group('sourceLine (offending line extraction)', () {
+    const src = 'local a = 1\nlocal b = 2\nlocal c = 3\n';
+
+    test('returns the trimmed text of the requested 1-based line', () {
+      expect(LuaStack.sourceLine(src, 1), 'local a = 1');
+      expect(LuaStack.sourceLine(src, 2), 'local b = 2');
+      expect(LuaStack.sourceLine(src, 3), 'local c = 3');
+    });
+
+    test('returns null for out-of-range lines', () {
+      expect(LuaStack.sourceLine(src, 0), isNull);
+      expect(LuaStack.sourceLine(src, 99), isNull);
+      expect(LuaStack.sourceLine(src, -1), isNull);
+    });
+
+    test('returns null for null/empty source', () {
+      expect(LuaStack.sourceLine(null, 1), isNull);
+      expect(LuaStack.sourceLine('', 1), isNull);
+    });
+
+    test('returns null for `=name` and `@path` sources', () {
+      expect(LuaStack.sourceLine('=somechunk', 1), isNull);
+      expect(LuaStack.sourceLine('@foo.lua', 1), isNull);
+    });
+
+    test('handles a last line with no trailing newline', () {
+      expect(LuaStack.sourceLine('one\ntwo\nthree', 3), 'three');
+    });
+
+    test('returns null if the requested line is blank', () {
+      expect(LuaStack.sourceLine('a\n\nb\n', 2), isNull);
+    });
+  });
+
   group('runtime error formatting', () {
     test('loadString: long source does not leak into error prefix', () {
       // Reproduce the original bug: a long script that triggers a runtime
@@ -80,10 +114,25 @@ void main() {
           reason: 'error message should not embed full source: $msg');
       expect(msg.contains('[string "'), isTrue, reason: msg);
       expect(msg.contains('attempt to index'), isTrue, reason: msg);
-      // The chunk id itself is bounded to ~60 chars; the full error message
-      // (prefix + message) should stay comfortably under a couple hundred.
-      expect(msg.length, lessThan(200),
+      // Error message is now two lines: `[id]:line: msg\n  > <snippet>`.
+      // The prefix line is bounded to ~60 chars by chunkid; the snippet
+      // line is bounded to ~200 chars.
+      expect(msg.length, lessThan(500),
           reason: 'error message unexpectedly long: $msg');
+    });
+
+    test('error message includes the offending source line as a snippet',
+        () {
+      final ls = LuaState.newState();
+      ls.openLibs();
+      const source = 'local t = nil\n'
+          'return t.x\n';
+      final ok = ls.doString(source);
+      expect(ok, isFalse);
+      final msg = ls.toStr(-1) ?? '';
+      // The snippet should be the text of line 2 (where the error happens).
+      expect(msg.contains('\n  > return t.x'), isTrue,
+          reason: 'expected snippet line, got: $msg');
     });
   });
 }
