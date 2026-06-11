@@ -2,199 +2,304 @@
 
 ![LuaDardo Plus Hero](assets/images/hero.png)
 
+A pure-Dart implementation of the Lua 5.3 virtual machine — actively maintained, performance-tuned, and feature-complete.
 
-A maintained fork of [LuaDardo](https://github.com/arcticfox1919/LuaDardo) - Lua 5.3 virtual machine written in pure Dart.
+[English](README.md) | [简体中文](README_zh.md)
 
-[English](README.md) | [繁體中文](README_zh.md)
+## About
 
+LuaDardo Plus is a maintained fork chain of [LuaDardo](https://github.com/arcticfox1919/LuaDardo), the original Lua 5.3 VM written in pure Dart.
 
-## Why This Fork?
+| Stage | Maintainer | Highlights |
+|-------|-----------|------------|
+| [LuaDardo](https://github.com/arcticfox1919/LuaDardo) | arcticfox1919 | Original Lua 5.3 VM implementation |
+| [LuaDardo Plus](https://github.com/ImL1s/LuaDardo) | ImL1s | Bug fixes (#13, #24, #33, #34, #36), web support, async functions, coroutines |
+| [Telosnex fork](https://github.com/Telosnex/LuaDardo) | Telosnex / jpohhhh | goto/label, 40+ bug fixes, major performance work, parser restructure, Lua 5.3 pattern matcher |
+| LuaDardo (this repo) | NaivG | Ongoing maintenance and development |
 
-The original LuaDardo has been inactive since July 2023 with several critical bugs unfixed. This fork provides:
+## Features
 
-- **Bug fixes** for issues #13, #24, #33, #34, #36
-- **Web platform support** - runs on all platforms including browsers
-- **Async Dart functions** - call async Dart code from Lua
-- **Active maintenance** and community support
-- **100% Dart** - no native dependencies
-
-### Fixed Issues
-
-| Issue | Description |
-|-------|-------------|
-| #13 | `string.gsub` infinite loop and incorrect replacement |
-| #24 | `math.random` upper bound not inclusive, negative ranges rejected |
-| #33 | Error messages lack source file and line number information |
-| #34 | `return` without value causes runtime error |
-| #36 | Userdata metatables shared globally instead of per-instance |
-| - | `math.min` returning maximum value instead of minimum |
-| - | `math.modf` returning only fractional part |
+- **100% Dart** — no native dependencies, runs on all Dart platforms including web
+- **goto/label** — full Lua 5.2+ scoping rules with proper upvalue closing
+- **Lua 5.3 pattern matching** — reference C implementation ported to Dart, including `%b` and `%f`
+- **Binary data** — `string.pack`, `string.unpack`, `string.packsize`, and `string.dump`
+- **Async interop** — call async Dart functions from Lua and vice versa
+- **Exposed parser & AST** — `lua_parser.dart` for static analysis tooling
+- **Web platform** — full browser support via platform abstraction layer
+- **Performance** — parser ~47% faster, VM stack ~22% faster, sprintf 5x faster than upstream
 
 ## Installation
 
 ```yaml
 dependencies:
-  lua_dardo_plus: ^0.3.0
+  lua_dardo_plus:
+    git: https://github.com/NaivG/LuaDardo.git
 ```
 
-## Example
+```bash
+dart pub get
+```
+
+## Quick Start
 
 ```dart
 import 'package:lua_dardo_plus/lua.dart';
 
 void main() {
-  LuaState state = LuaState.newState();
+  final state = LuaState.newState();
   state.openLibs();
-  state.loadString(r'''
-a = 10
-while a < 20 do
-   print("a value is", a)
-   a = a + 1
-end
-''');
-  state.call(0, 0);
+  state.doString(r'''
+    for i = 1, 5 do
+      print("Hello from Lua!", i)
+    end
+  ''');
 }
 ```
 
 ## Usage
 
-The LuaDardo Plus library is compatible with Lua C APIs. For Dart-Lua interoperability, refer to the [Lua C API guide](https://www.lua.org/manual/5.3/manual.html#luaL_newstate).
+The API mirrors the [Lua C API](https://www.lua.org/manual/5.3/manual.html#luaL_newstate). If you've used `lua_State` in C, the Dart API will feel familiar.
 
 ### Dart Calls Lua
 
-Get Lua variables:
+Read Lua variables from Dart:
+
 ```lua
--- test.lua
-a = 100
-b = 120
+-- config.lua
+width = 1920
+height = 1080
+title = "My App"
 ```
 
 ```dart
-LuaState ls = LuaState.newState();
+final ls = LuaState.newState();
 ls.openLibs();
-ls.doFile("test.lua");
+ls.doFile("config.lua");
 
-ls.getGlobal("a");
-if (ls.isNumber(-1)) {
-  var a = ls.toNumber(-1);
-  print("a=$a");
-}
+ls.getGlobal("width");
+print("width = ${ls.toInteger(-1)}");  // 1920
+ls.pop(1);
 
-ls.getGlobal("b");
-if (ls.isNumber(-1)) {
-  var b = ls.toNumber(-1);
-  print("b=$b");
-}
+ls.getGlobal("title");
+print("title = ${ls.toStr(-1)}");  // My App
+ls.pop(1);
 ```
 
-Get Lua table:
+Call Lua functions with arguments and return values:
+
 ```lua
--- test.lua
-mytable = {k1 = 1, k2 = 2.34, k3 = "test"}
-```
-
-```dart
-ls.getGlobal("mytable");
-ls.getField(-1, "k1");
-if (ls.isInteger(-1)) {
-  var k1 = ls.toInteger(-1);
-}
-```
-
-Call Lua function:
-```lua
--- test.lua
-function myFunc()
-    print("myFunc run")
+-- math_utils.lua
+function add(a, b)
+    return a + b
 end
 ```
 
 ```dart
-ls.doFile("test.lua");
-ls.getGlobal("myFunc");
-if (ls.isFunction(-1)) {
-  ls.pCall(0, 0, 0);
-}
+ls.doFile("math_utils.lua");
+ls.getGlobal("add");
+ls.pushInteger(3);
+ls.pushInteger(4);
+ls.pCall(2, 1, 0);
+print("3 + 4 = ${ls.toInteger(-1)}");  // 7
+```
+
+Read Lua tables:
+
+```lua
+-- config.lua
+player = { name = "Hero", hp = 100, level = 5 }
+```
+
+```dart
+ls.getGlobal("player");
+ls.getField(-1, "name");
+print(ls.toStr(-1));  // Hero
+ls.pop(1);
+ls.getField(-1, "hp");
+print(ls.toInteger(-1));  // 100
+ls.pop(2);  // pop hp + table
 ```
 
 ### Lua Calls Dart
 
+Register Dart functions that Lua scripts can invoke:
+
 ```dart
-import 'package:lua_dardo_plus/lua.dart';
 import 'dart:math';
 
-// Wrapper function signature: int Function(LuaState ls)
-// Return value is the number of returned values
-int randomInt(LuaState ls) {
-  int max = ls.checkInteger(1);
+int dartRandom(LuaState ls) {
+  final max = ls.checkInteger(1);
   ls.pop(1);
-
-  var random = Random();
-  var randVal = random.nextInt(max);
-  ls.pushInteger(randVal);
-  return 1;
+  ls.pushInteger(Random().nextInt(max));
+  return 1;  // number of return values
 }
 
 void main() {
-  LuaState state = LuaState.newState();
+  final state = LuaState.newState();
   state.openLibs();
 
-  state.pushDartFunction(randomInt);
-  state.setGlobal('randomInt');
+  state.pushDartFunction(dartRandom);
+  state.setGlobal('dartRandom');
 
-  state.loadString('''
-rand_val = randomInt(10)
-print('random value is '..rand_val)
-''');
-  state.call(0, 0);
+  state.doString('''
+    print("Random:", dartRandom(100))
+  ''');
 }
 ```
+
+The wrapper function signature is `int Function(LuaState ls)`, where the return value indicates how many values are pushed onto the Lua stack.
 
 ### Async Dart Functions
 
-Call async Dart functions from Lua (v0.3.0+):
+Call async Dart code from Lua — useful for HTTP requests, file I/O, database queries, etc.
 
 ```dart
-import 'package:lua_dardo_plus/lua.dart';
-
 Future<int> fetchData(LuaState ls) async {
   final url = ls.checkString(1);
 
-  // Simulate async operation (e.g., HTTP request)
+  // Simulate async operation
   await Future.delayed(Duration(seconds: 1));
 
-  ls.pushString('Data from $url');
-  return 1; // Number of return values
+  ls.pushString('Response from $url');
+  return 1;
 }
 
 void main() async {
-  LuaState state = LuaState.newState();
+  final state = LuaState.newState();
   state.openLibs();
 
-  // Register async function
+  // Register async function as a global
   state.registerAsync('fetchData', fetchData);
 
-  // Call from Dart using callAsync
+  // Call it from Dart
   state.getGlobal('fetchData');
   state.pushString('https://api.example.com');
   await state.callAsync(1, 1);
-
-  print(state.toStr(-1)); // "Data from https://api.example.com"
+  print(state.toStr(-1));  // Response from https://api.example.com
 }
 ```
 
-Available async methods:
-- `registerAsync(name, func)` - Register async function as global
-- `pushDartFunctionAsync(func)` - Push async function onto stack
-- `pushDartClosureAsync(func, nUpvals)` - Push async closure with upvalues
-- `callAsync(nArgs, nResults)` - Call function asynchronously
-- `pCallAsync(nArgs, nResults, errFunc)` - Protected async call
-- `doStringAsync(code)` - Execute Lua string asynchronously
-- `doFileAsync(path)` - Execute Lua file asynchronously
+**Async API reference:**
 
-## Integration with Flutter
+| Method | Description |
+|--------|-------------|
+| `registerAsync(name, func)` | Register an async function as a Lua global |
+| `pushDartFunctionAsync(func)` | Push an async function onto the stack |
+| `pushDartClosureAsync(func, n)` | Push an async closure with `n` upvalues |
+| `callAsync(nArgs, nResults)` | Call a function asynchronously |
+| `pCallAsync(nArgs, nResults, err)` | Protected async call with error handler |
+| `doStringAsync(code)` | Execute a Lua string asynchronously |
+| `doFileAsync(path)` | Execute a Lua file asynchronously |
 
-For a full example of how to integrate LuaDardo Plus into a Flutter application with Riverpod state management, see the [Flutter Lua Example](https://github.com/ImL1s/flutter_lua_example).
+## Language Features
+
+### goto / label
+
+Full support for Lua 5.2+ `goto` and `::label::` syntax, including proper upvalue closing and same-name label shadowing:
+
+```lua
+for i = 1, 10 do
+  for j = 1, 10 do
+    if i * j > 50 then
+      goto done
+    end
+    print(i, j)
+  end
+end
+::done::
+print("Finished!")
+```
+
+### Coroutines
+
+Full Lua coroutine library:
+
+```lua
+local co = coroutine.create(function(a, b)
+  local sum = a + b
+  local extra = coroutine.yield(sum)
+  return sum + extra
+end)
+
+local ok, result = coroutine.resume(co, 10, 20)
+print(result)            -- 30 (yielded value)
+local ok2, result2 = coroutine.resume(co, 5)
+print(result2)           -- 35 (final result)
+```
+
+### Lua 5.3 Pattern Matching
+
+The pattern matcher is ported from the reference Lua 5.3 C implementation, including support for `%b` (balanced match) and `%f` (frontier pattern):
+
+```lua
+-- Balanced parentheses matching
+print(string.match("(hello (world))", "%b()"))  -- (hello (world))
+
+-- Frontier pattern (word boundaries)
+for w in string.gmatch("hello world", "%f[%a]%a+") do
+  print(w)  -- "hello", "world"
+end
+```
+
+### Binary Data Packing
+
+`string.pack`, `string.unpack`, and `string.packsize` for binary data manipulation:
+
+```lua
+local packed = string.pack(">i4i4", 100, 200)
+local a, b = string.unpack(">i4i4", packed)
+print(a, b)  -- 100  200
+```
+
+### Function Serialization
+
+`string.dump` serializes compiled Lua functions to binary chunk format:
+
+```lua
+local f = load("return 1 + 2")
+local bytes = string.dump(f)
+local f2 = load(bytes)
+print(f2())  -- 3
+```
+
+## Parser & Static Analysis
+
+The parser and AST are exposed as a separate library for building static analysis tools:
+
+```dart
+import 'package:lua_dardo_plus/lua_parser.dart';
+
+void main() {
+  final parser = Parser('print("hello")', 'example.lua');
+  final block = parser.parse();
+  // Inspect the AST: block.stats, expressions, etc.
+}
+```
+
+A debug utility is also available for inspecting the Lua stack at runtime:
+
+```dart
+import 'package:lua_dardo_plus/debug.dart';
+
+state.printStack();  // Prints stack contents with types and values
+```
+
+## Performance
+
+Significant performance improvements over the upstream LuaDardo Plus v0.3.0:
+
+| Component | Improvement | Notes |
+|-----------|------------|-------|
+| Parser (end-to-end) | ~47% faster | Lexer + statement parser tuning |
+| Statement parser | ~12% faster | Records + pre-sized lists |
+| VM stack | ~22% faster | Fixed-capacity array implementation |
+| `sprintf` | 5x faster | Optimized fork for Lua formatting |
+| `string.format` | 3.7x faster | Bypasses `sprintf` for simple specifiers |
+| Opcode dispatch | Reduced overhead | Eliminated stringly-typed dispatch |
+
+## Flutter Integration
+
+For a full example of integrating LuaDardo Plus into a Flutter application with Riverpod state management, see the [Flutter Lua Example](https://github.com/ImL1s/flutter_lua_example).
 
 ### Architecture
 
@@ -204,35 +309,36 @@ For a full example of how to integrate LuaDardo Plus into a Flutter application 
 
 ![Communication Flow](assets/images/flow.png)
 
-### Web Platform Support
+## Web Platform Support
 
-LuaDardo Plus works on web platforms (v0.3.0+). The library uses platform abstraction to handle `dart:io` dependencies:
+LuaDardo Plus runs in browsers via a platform abstraction layer that handles `dart:io` dependencies:
 
 ```dart
 import 'package:lua_dardo_plus/lua.dart';
 import 'package:lua_dardo_plus/src/platform/platform.dart';
 
 void main() {
-  // Customize print output (useful for web)
-  PlatformServices.instance.printCallback = (s) {
-    // Redirect to console, DOM, etc.
-    print(s);
-  };
+  // Redirect print output (useful for web)
+  PlatformServices.instance.printCallback = (s) => print(s);
 
-  LuaState state = LuaState.newState();
+  final state = LuaState.newState();
   state.openLibs();
   state.doString('print("Hello from Lua on the web!")');
 }
 ```
 
-**Web limitations:**
-- `os.execute()`, `os.exit()`, `os.remove()`, `os.rename()`, `os.getenv()` throw `UnsupportedError`
-- `os.time()`, `os.clock()`, `os.date()`, `os.difftime()` work normally
-- File loading (`doFile`, `loadFile`) not supported on web
+**Web limitations:** `os.execute()`, `os.exit()`, `os.remove()`, `os.rename()`, and `os.getenv()` throw `UnsupportedError`. Time functions (`os.time`, `os.clock`, `os.date`, `os.difftime`) work normally. File loading (`doFile`, `loadFile`) is not supported on web.
 
 ## Migration from lua_dardo
 
-Simply update your import:
+Update your dependency and import:
+
+```yaml
+# pubspec.yaml
+dependencies:
+  lua_dardo_plus:
+    git: https://github.com/NaivG/LuaDardo.git
+```
 
 ```dart
 // Before
@@ -242,11 +348,22 @@ import 'package:lua_dardo/lua.dart';
 import 'package:lua_dardo_plus/lua.dart';
 ```
 
+Additional imports available:
+
+```dart
+import 'package:lua_dardo_plus/lua_parser.dart';  // Parser & AST
+import 'package:lua_dardo_plus/debug.dart';        // Debug utilities
+```
+
 ## License
 
 Apache-2.0 (same as original LuaDardo)
 
 ## Credits
 
-- Original author: [arcticfox1919](https://github.com/arcticfox1919)
-- Fork maintainer: [ImL1s](https://github.com/ImL1s)
+| Contributor | Role |
+|-------------|------|
+| [arcticfox1919](https://github.com/arcticfox1919) | Original LuaDardo author |
+| [ImL1s](https://github.com/ImL1s) | LuaDardo Plus fork — bug fixes, web support, async, coroutines |
+| [Telosnex / jpohhhh](https://github.com/Telosnex) | goto/label, performance work, parser restructure, 40+ bug fixes |
+| [NaivG](https://github.com/NaivG) | Current maintainer |

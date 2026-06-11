@@ -1,78 +1,84 @@
 # Contributing to LuaDardo Plus
 
-## Branch Strategy
+## Fork Lineage
 
 ```
-upstream (arcticfox1919/LuaDardo)
+arcticfox1919/LuaDardo (original)
        │
        ▼
-   [main] ◄──── Synced with upstream, used for PRs
+   ImL1s/LuaDardo (LuaDardo Plus)
        │
-       ├── fix/issue-XX ──► PR to upstream
-       │                         │
-       ▼                         ▼
-  [develop] ◄───────────── Merge back
+       ▼
+   Telosnex/LuaDardo (Telosnex fork)
        │
-       └── lua_dardo_plus (independent project)
+       ▼
+   NaivG/LuaDardo (this repo)
 ```
 
-### Branch Purposes
+| Repository | Maintainer | Role |
+|-----------|-----------|------|
+| `arcticfox1919/LuaDardo` | arcticfox1919 | Original Lua 5.3 VM (inactive since July 2023) |
+| `ImL1s/LuaDardo` | ImL1s | Bug fixes, web support, async functions, coroutines |
+| `Telosnex/LuaDardo` | jpohhhh | goto/label, performance, parser restructure, 40+ bug fixes |
+| `NaivG/LuaDardo` | NaivG | Current development (this repo) |
 
-| Branch | Purpose |
-|--------|---------|
-| `main` | Stays synced with upstream `arcticfox1919/LuaDardo`. Used as base for PRs. |
-| `develop` | Main development branch for `lua_dardo_plus`. Contains all fixes + renaming. |
-| `fix/*` | Feature/fix branches. Created from `main` for upstream PRs. |
-
-## Workflow for New Fixes
-
-### 1. Sync with Upstream
+## Development Setup
 
 ```bash
-# Add upstream remote (one-time setup)
-git remote add upstream https://github.com/arcticfox1919/LuaDardo.git
+# Clone the repository
+git clone https://github.com/NaivG/LuaDardo.git
+cd LuaDardo
 
-# Sync main with upstream
-git checkout main
-git fetch upstream
-git merge upstream/main
-git push origin main
+# Install dependencies
+dart pub get
+
+# Run tests
+dart test
+
+# Run static analysis
+dart analyze
 ```
 
-### 2. Create Fix Branch
+## Workflow
 
-```bash
-git checkout main
-git checkout -b fix/issue-XX
-```
-
-### 3. Implement Fix
-
-- Write the fix
-- Add tests in `test/bugfix/issues_test.dart`
-- Run tests: `dart test`
-- Commit with descriptive message
-
-### 4. Open PR to Upstream
-
-```bash
-git push -u origin fix/issue-XX
-gh pr create --repo arcticfox1919/LuaDardo --title "Fix issue #XX" --body "Description..."
-```
-
-### 5. Merge to Develop
+### 1. Create a Feature/Fix Branch
 
 ```bash
 git checkout develop
-git merge fix/issue-XX
-git push origin develop
+git checkout -b fix/issue-XX   # or feat/xxx
 ```
 
-### 6. Publish New Version
+### 2. Implement Changes
+
+- Write the fix or feature
+- Add tests in the appropriate `test/` subdirectory
+- Run tests: `dart test`
+- Run analysis: `dart analyze`
+- Format code: `dart format .`
+
+### 3. Commit
+
+```bash
+git add .
+git commit -m "fix: description of the fix"
+```
+
+Commit message format: `<type>: <description>`
+
+Types: `fix`, `feat`, `docs`, `test`, `refactor`, `perf`, `chore`
+
+### 4. Push and Open PR
+
+```bash
+git push -u origin fix/issue-XX
+```
+
+### 5. Publish New Version
 
 ```bash
 # Update version in pubspec.yaml
 # Update CHANGELOG.md
+dart pub publish --dry-run  # Verify
 dart pub publish
 ```
 
@@ -84,50 +90,72 @@ We follow [Semantic Versioning](https://semver.org/):
 - **MINOR**: New features, backward compatible
 - **PATCH**: Bug fixes, backward compatible
 
-Current version: `0.1.0`
+Current version: `0.3.1`
 
 ## Testing
 
-All fixes must include tests:
+All changes must include tests:
 
 ```bash
 # Run all tests
 dart test
 
-# Run specific test file
-dart test test/bugfix/issues_test.dart
+# Run specific test directories
+dart test test/stdlib        # Standard library tests
+dart test test/codegen       # goto/label codegen tests
+dart test test/async         # Async function tests
+dart test test/perf          # Performance benchmarks
+dart test test/bugfix        # Bug fix regression tests
 
 # Run with coverage
 dart test --coverage=coverage
 ```
 
+Property-based tests use `package:glados` (see `test/stdlib/` for examples).
+
 ## Code Style
 
-- Follow Dart style guide
-- Run `dart format .` before committing
-- Run `dart analyze` to check for issues
+- Follow standard Dart formatting (`dart format .`)
+- 2-space indentation
+- `UpperCamelCase` for types, `lowerCamelCase` for variables/functions
+- `snake_case.dart` for filenames
+- Run `dart analyze` to check for issues (zero warnings expected)
 
-## Commit Messages
+## Project Structure
 
-Format:
 ```
-<type>: <description>
+lib/
+├── lua.dart              # Main entry point — public API
+├── lua_parser.dart       # Parser & AST for static analysis
+├── debug.dart            # Debug utilities (printStack)
+└── src/
+    ├── api/              # Core Lua API
+    ├── binchunk/         # Binary chunk parsing
+    ├── compiler/         # Lexer, Parser, AST, CodeGen
+    ├── number/           # Numeric helpers
+    ├── platform/         # Platform abstraction (IO/Web)
+    ├── state/            # VM state (Stack, Table, Closure, etc.)
+    ├── stdlib/           # Standard libraries
+    ├── types/            # Exceptions, ThreadCache
+    └── vm/               # VM instructions and opcodes
 
-[optional body]
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
+test/
+├── async/                # Async function tests
+├── bugfix/               # Regression tests
+├── codegen/              # goto/label tests
+├── coroutine/            # Coroutine tests
+├── module/               # Module loading tests + Lua fixtures
+├── perf/                 # Performance benchmarks
+├── platform/             # Platform tests
+├── state/                # Numeric handling tests
+└── stdlib/               # Standard library tests
 ```
-
-Types:
-- `fix`: Bug fix
-- `feat`: New feature
-- `docs`: Documentation
-- `test`: Adding tests
-- `refactor`: Code refactoring
 
 ## Release Checklist
 
-- [ ] All tests pass
+- [ ] All tests pass (`dart test`)
+- [ ] Static analysis clean (`dart analyze`)
+- [ ] Code formatted (`dart format .`)
 - [ ] Version bumped in `pubspec.yaml`
 - [ ] CHANGELOG.md updated
 - [ ] README.md updated if needed

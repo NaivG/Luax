@@ -5,6 +5,104 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - Unreleased
+
+### Added
+
+- Async call path for Lua closures and async Dart functions, enabling non-blocking interop between the two runtimes.
+- Exposed the parser and AST via `lua_parser.dart`, allowing external tooling to parse and inspect Lua source.
+- `goto`/`label` statements with forward and backward jumps following Lua 5.2+ scoping rules.
+- Reference Lua 5.3 pattern matcher ported from C, adding support for `%b` (balanced match) and `%f` (frontier pattern).
+- Runtime error messages now include the offending source line for easier debugging.
+- `string.dump` — serialize Lua functions to binary chunk format.
+- `string.pack`, `string.unpack`, and `string.packsize` for binary data packing/unpacking.
+
+### Changed
+
+- Parser is approximately 47% faster end-to-end via lexer and statement-parser tuning.
+- `StatParser` is approximately 12% faster through the use of records and pre-sized lists.
+- `sprintf` fork delivers roughly 5x speedup; simple format specifiers bypass `sprintf` entirely for an additional 3.7x gain.
+- Fixed-capacity VM stack yields approximately 22% faster execution.
+- Opcode dispatch no longer relies on stringly-typed comparison, reducing overhead per instruction.
+- Updated minimum Dart SDK to 3+ for null-safety by default.
+
+### Fixed
+
+#### String library
+
+- `string.reverse` no longer crashes on multi-character strings.
+- `string.find` now returns capture groups and reports the correct end position when pattern length differs from match length.
+- `string.match` returns the full match instead of only capture groups.
+- `string.format` no longer crashes on `%q` (Lua quoted-string escaping implemented from scratch), nor on `%e`, `%E`, `%g`, `%G` specifiers.
+- `string.gsub` now accepts function and table replacements (previously string-only), correctly interprets capture back-references (`%0`, `%1`, etc.), and skips empty-string input.
+- `string.gmatch` re-anchors `^` on substrings, no longer uses `indexOf` to advance (which caused wrong matches and potential infinite loops), and handles matches at end-of-string without a `RangeError`.
+
+#### Pattern / regex engine
+
+- `luaPatternToRegex` now correctly handles dot/newline semantics, anchors, regex metacharacters, and lazy quantifier tracking.
+- Lua character classes (`%a`, `%d`, `%w`, etc.) inside bracket sets no longer produce invalid nested regex.
+- All Lua pattern classes (`%a`, `%d`, `%s`, `%l`, `%u`, `%w`, `%p`, `%c`, `%x`) are now translated to Dart regex equivalents.
+- Literal dash immediately after a group parenthesis in `luaPatternToRegex` is escaped correctly.
+
+#### Math library
+
+- `math.fmod` uses truncation mod instead of floor mod, producing correct results for negative operands.
+- `math.abs` now pushes a result for non-negative integer inputs (previously a missing return).
+- `math.ult` performs unsigned comparison instead of signed, matching the Lua 5.3 specification.
+
+#### OS library
+
+- `os.date` now treats the time argument as an epoch timestamp (not a duration from now), actually formats the output string instead of returning the format string as-is, and together with `os.time` matches the Lua 5.3 specification.
+- `os.clock` returns approximate CPU time instead of epoch wall-clock seconds.
+
+#### Coroutine library
+
+- Multi-resume no longer corrupts the stack — resume arguments are now placed as `CALL` results correctly.
+- Resume properly unwinds nested call frames on yield/error.
+
+#### Type coercion
+
+- `toIntegerX` now coerces strings and floats, fixing `checkInteger` for string arguments.
+- `toNumberX` now coerces strings to numbers, fixing `checkNumber` and `isNumber` for string arguments.
+- Replaced overly-strict `int`/`double` checks with `num` throughout the runtime for consistent numeric handling.
+
+#### Error handling
+
+- `error()`, `pcall`, and `xpcall` no longer stringify non-string error objects — tables and numbers passed to message handlers are preserved intact.
+- `xpcall` now invokes the message handler instead of throwing a `todo!` stub.
+- `_checkTab` metamethod logic was inverted — checks are now performed when requested rather than skipped.
+
+#### Numeric / bitwise internals
+
+- Hex float parsing no longer overflows on exponents greater than 63.
+- `logicalRShift` uses a full 64-bit mask instead of a 60-bit mask that zeroed bits 60-63 on every shift.
+- `luaMaxInteger` is now correctly 2^63 - 1 (operator precedence bug `1 << 63 - 1` fixed).
+- `tonumber` with base 16 now accepts `0x`/`0X` prefixed strings.
+- Lexer `readNumeral` no longer misuses `startsWith` with multi-character strings; hex float parsing added.
+
+#### VM / runtime
+
+- `loadfile` reads the mode argument from stack index 2 (was reading from index 1); `dofile` no longer defaults the filename to `"bt"`.
+- The `#` (length) operator on strings now returns a value (missing return added).
+- `\xXX` and `\ddd` byte escapes are decoded as UTF-8 code points in Dart strings.
+- Chunk IDs are truncated in error messages (ported `luaO_chunkid`) and in `traceStack()` frame labels.
+
+#### Goto / labels
+
+- Upvalue closing on `goto` jump now works correctly.
+- Same-name label shadowing is handled per Lua 5.2+ scoping rules.
+
+#### Debug
+
+- `debug.dart` `printStack` had a duplicate `luaNil` case instead of `luaBoolean` — corrected.
+
+### Tests
+
+- 56 gremlin torture tests for `goto`/`label` (forward jumps, backward jumps, upvalue closing, shadowing).
+- Glados property-based tests for math, table, operators, and coroutines.
+- Edge-case tests for `string.find`.
+- Skip-failing test marker for the multi-resume coroutine bug.
+
 ## [0.3.0] - 2024-12-29
 
 ### Added
