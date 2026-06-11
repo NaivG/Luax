@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -645,6 +646,13 @@ class LuaStateImpl implements LuaState, LuaVM {
       Closure c = f as Closure;
       if (c.proto != null) {
         _callLuaClosure(nArgs, nResults, c);
+      } else if (c.isAsync) {
+        // Async Dart closures cannot be invoked from the synchronous call
+        // path — the VM instruction loop has no way to await. Use pCallAsync
+        // or callAsync instead.
+        throw Exception(_stack!.formatError(
+            'attempt to call an async Dart function from synchronous context '
+            '(use pCallAsync / callAsync)'));
       } else {
         _callDartClosure(nArgs, nResults, c);
       }
@@ -682,6 +690,40 @@ class LuaStateImpl implements LuaState, LuaVM {
     if (nResults != 0) {
       List<Object?> results = newStack.popN(newStack.top() - nRegs);
       //stack.check(results.size())
+      _stack!.pushN(results, nResults);
+    }
+  }
+
+  /// Async version of [_callLuaClosure].
+  /// Used by [callAsync] so that the entire call chain supports awaiting
+  /// async Dart functions invoked from within Lua code.
+  Future<void> _callLuaClosureAsync(
+      int nArgs, int nResults, Closure c) async {
+    int nRegs = c.proto!.maxStackSize;
+    int nParams = c.proto!.numParams!;
+    bool isVararg = c.proto!.isVararg == 1;
+
+    // create new lua stack
+    LuaStack newStack = _newStack(nRegs + 20);
+    newStack.state = this;
+    newStack.closure = c;
+
+    // pass args, pop func
+    List<Object?> funcAndArgs = _stack!.popN(nArgs + 1);
+    newStack.pushN(funcAndArgs.sublist(1, funcAndArgs.length), nParams);
+    if (nArgs > nParams && isVararg) {
+      newStack.varargs = funcAndArgs.sublist(nParams + 1, funcAndArgs.length);
+    }
+
+    // run closure (async-aware instruction loop)
+    _pushLuaStack(newStack);
+    setTop(nRegs);
+    await _runLuaClosureAsync();
+    _popLuaStack();
+
+    // return results
+    if (nResults != 0) {
+      List<Object?> results = newStack.popN(newStack.top() - nRegs);
       _stack!.pushN(results, nResults);
     }
   }
@@ -862,6 +904,153 @@ class LuaStateImpl implements LuaState, LuaVM {
     }
   }
 
+  /// Async-aware instruction loop.
+  ///
+  /// Identical to [_runLuaClosure] except that CALL, TAILCALL and TFORCALL
+  /// inline the target resolution and, when the callee is an async Dart
+  /// closure, `await` the call through [callAsync] instead of going through
+  /// the synchronous [call] path (which would crash on `dartFunc!`).
+  Future<void> _runLuaClosureAsync() async {
+    for (;;) {
+      final int inst = fetch();
+      switch (inst & 0x3F) {
+        // ── sync-only opcodes (unchanged) ──────────────────────────────
+        case 0:  Instructions.move(inst, this);     break;
+        case 1:  Instructions.loadK(inst, this);    break;
+        case 2:  Instructions.loadKx(inst, this);   break;
+        case 3:  Instructions.loadBool(inst, this); break;
+        case 4:  Instructions.loadNil(inst, this);  break;
+        case 5:  Instructions.getUpval(inst, this); break;
+        case 6:  Instructions.getTabUp(inst, this); break;
+        case 7:  Instructions.getTable(inst, this); break;
+        case 8:  Instructions.setTabUp(inst, this); break;
+        case 9:  Instructions.setUpval(inst, this); break;
+        case 10: Instructions.setTable(inst, this); break;
+        case 11: Instructions.newTable(inst, this); break;
+        case 12: Instructions.self(inst, this);     break;
+        case 13: Instructions.add(inst, this);      break;
+        case 14: Instructions.sub(inst, this);      break;
+        case 15: Instructions.mul(inst, this);      break;
+        case 16: Instructions.mod(inst, this);      break;
+        case 17: Instructions.pow(inst, this);      break;
+        case 18: Instructions.div(inst, this);      break;
+        case 19: Instructions.idiv(inst, this);     break;
+        case 20: Instructions.band(inst, this);     break;
+        case 21: Instructions.bor(inst, this);      break;
+        case 22: Instructions.bxor(inst, this);     break;
+        case 23: Instructions.shl(inst, this);      break;
+        case 24: Instructions.shr(inst, this);      break;
+        case 25: Instructions.unm(inst, this);      break;
+        case 26: Instructions.bnot(inst, this);     break;
+        case 27: Instructions.not(inst, this);      break;
+        case 28: Instructions.length(inst, this);   break;
+        case 29: Instructions.concat(inst, this);   break;
+        case 30: Instructions.jmp(inst, this);      break;
+        case 31: Instructions.eq(inst, this);       break;
+        case 32: Instructions.lt(inst, this);       break;
+        case 33: Instructions.le(inst, this);       break;
+        case 34: Instructions.test(inst, this);     break;
+        case 35: Instructions.testSet(inst, this);  break;
+
+        // ── CALL: R(A),...,R(A+C-2) := R(A)(R(A+1),...,R(A+B-1)) ──────
+        case 36:
+          await _execCallAsync(inst);
+          break;
+
+        // ── TAILCALL: return R(A)(R(A+1),...,R(A+B-1)) ────────────────
+        case 37:
+          await _execTailCallAsync(inst);
+          break;
+
+        // ── RETURN ─────────────────────────────────────────────────────
+        case 38:
+          Instructions.return_(inst, this);
+          return;
+
+        case 39: Instructions.forLoop(inst, this);  break;
+        case 40: Instructions.forPrep(inst, this);  break;
+
+        // ── TFORCALL: R(A+3),...,R(A+2+C) := R(A)(R(A+1),R(A+2)) ─────
+        case 41:
+          await _execTForCallAsync(inst);
+          break;
+
+        case 42: Instructions.tForLoop(inst, this); break;
+        case 43: Instructions.setList(inst, this);  break;
+        case 44: Instructions.closure(inst, this);  break;
+        case 45: Instructions.vararg(inst, this);   break;
+        case 46: break; // EXTRAARG
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  //  Async-aware helpers for CALL / TAILCALL / TFORCALL
+  // ---------------------------------------------------------------------------
+
+  /// Async version of [Instructions.call].
+  /// Resolves the callee; if it is an async Dart closure the call is
+  /// dispatched through [callAsync] so the Future can be awaited.
+  Future<void> _execCallAsync(int inst) async {
+    final int a = Instruction.getA(inst) + 1;
+    final int b = Instruction.getB(inst);
+    final int c = Instruction.getC(inst);
+    final int nArgs = Instructions.pushFuncAndArgs(a, b, this);
+    await _callTargetAsync(nArgs, c - 1);
+    Instructions.popResults(a, c, this);
+  }
+
+  /// Async version of [Instructions.tailCall].
+  Future<void> _execTailCallAsync(int inst) async {
+    final int a = Instruction.getA(inst) + 1;
+    final int b = Instruction.getB(inst);
+    // todo: optimize tail call!
+    const int c = 0;
+    final int nArgs = Instructions.pushFuncAndArgs(a, b, this);
+    await _callTargetAsync(nArgs, c - 1);
+    Instructions.popResults(a, c, this);
+  }
+
+  /// Async version of [Instructions.tForCall].
+  Future<void> _execTForCallAsync(int inst) async {
+    final int a = Instruction.getA(inst) + 1;
+    final int c = Instruction.getC(inst);
+    Instructions.pushFuncAndArgs(a, 3, this);
+    await _callTargetAsync(2, c);
+    Instructions.popResults(a + 3, c + 1, this);
+  }
+
+  /// Core dispatch: like [call] but awaits async Dart closures and
+  /// recursively enters [_runLuaClosureAsync] for Lua closures.
+  Future<void> _callTargetAsync(int nArgs, int nResults) async {
+    Object? val = _stack!.get(-(nArgs + 1));
+    Object? f = val is Closure ? val : null;
+
+    if (f == null) {
+      Object? mf = _getMetafield(val, '__call');
+      if (mf != null && mf is Closure) {
+        _stack!.push(f);
+        insert(-(nArgs + 2));
+        nArgs += 1;
+        f = mf;
+      }
+    }
+
+    if (f != null) {
+      Closure c = f as Closure;
+      if (c.proto != null) {
+        await _callLuaClosureAsync(nArgs, nResults, c);
+      } else if (c.isAsync) {
+        await _callDartClosureAsync(nArgs, nResults, c);
+      } else {
+        _callDartClosure(nArgs, nResults, c);
+      }
+    } else {
+      throw Exception(
+          _stack!.formatError('attempt to call a non-function value'));
+    }
+  }
+
   /// Asynchronously call a function.
   /// This handles both sync and async Dart functions as well as Lua closures.
   @override
@@ -882,7 +1071,7 @@ class LuaStateImpl implements LuaState, LuaVM {
     if (f != null) {
       Closure c = f as Closure;
       if (c.proto != null) {
-        _callLuaClosure(nArgs, nResults, c);
+        await _callLuaClosureAsync(nArgs, nResults, c);
       } else if (c.isAsync) {
         await _callDartClosureAsync(nArgs, nResults, c);
       } else {

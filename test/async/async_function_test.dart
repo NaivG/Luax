@@ -284,5 +284,164 @@ void main() {
         expect(lua.toStr(-1), equals('10-hello-true'));
       });
     });
+
+    // =========================================================================
+    //  Async calls FROM WITHIN Lua code  (regression: used to crash with
+    //  "Null check operator used on a null value" because the synchronous
+    //  VM instruction loop could not await async Dart closures)
+    // =========================================================================
+
+    group('Async calls from within Lua code', () {
+      test('Lua code directly calling async Dart function via doStringAsync',
+          () async {
+        lua.registerAsync('asyncAdd', (LuaState ls) async {
+          final a = ls.toInteger(1);
+          final b = ls.toInteger(2);
+          await Future.delayed(Duration(milliseconds: 10));
+          ls.pushInteger(a + b);
+          return 1;
+        });
+
+        final success = await lua.doStringAsync('''
+          result = asyncAdd(10, 20)
+        ''');
+
+        expect(success, isTrue);
+        lua.getGlobal('result');
+        expect(lua.toInteger(-1), equals(30));
+      });
+
+      test('Lua function wrapping async call via pCallAsync', () async {
+        lua.registerAsync('fetchData', (LuaState ls) async {
+          await Future.delayed(Duration(milliseconds: 10));
+          ls.pushString('hello from async');
+          return 1;
+        });
+
+        lua.doString('''
+          function myHandler()
+            return fetchData()
+          end
+        ''');
+
+        lua.getGlobal('myHandler');
+        final status = await lua.pCallAsync(0, 1, 0);
+        expect(status, equals(ThreadStatus.luaOk));
+        expect(lua.toStr(-1), equals('hello from async'));
+      });
+
+      test('Lua handler with multiple sequential async calls', () async {
+        var callCount = 0;
+        lua.registerAsync('asyncIncrement', (LuaState ls) async {
+          await Future.delayed(Duration(milliseconds: 5));
+          callCount++;
+          ls.pushInteger(callCount);
+          return 1;
+        });
+
+        lua.doString('''
+          function doThree()
+            local a = asyncIncrement()
+            local b = asyncIncrement()
+            local c = asyncIncrement()
+            return a + b + c
+          end
+        ''');
+
+        lua.getGlobal('doThree');
+        final status = await lua.pCallAsync(0, 1, 0);
+        expect(status, equals(ThreadStatus.luaOk));
+        // 1 + 2 + 3 = 6
+        expect(lua.toInteger(-1), equals(6));
+        expect(callCount, equals(3));
+      });
+
+      test('Lua handler with conditional async calls', () async {
+        lua.registerAsync('asyncDouble', (LuaState ls) async {
+          await Future.delayed(Duration(milliseconds: 5));
+          ls.pushInteger(ls.toInteger(1) * 2);
+          return 1;
+        });
+
+        lua.doString('''
+          function conditional(x)
+            if x > 0 then
+              return asyncDouble(x)
+            else
+              return -1
+            end
+          end
+        ''');
+
+        // Positive path — triggers async call
+        lua.getGlobal('conditional');
+        lua.pushInteger(21);
+        var status = await lua.pCallAsync(1, 1, 0);
+        expect(status, equals(ThreadStatus.luaOk));
+        expect(lua.toInteger(-1), equals(42));
+        lua.pop(1);
+
+        // Negative path — no async call
+        lua.getGlobal('conditional');
+        lua.pushInteger(-5);
+        status = await lua.pCallAsync(1, 1, 0);
+        expect(status, equals(ThreadStatus.luaOk));
+        expect(lua.toInteger(-1), equals(-1));
+      });
+
+      test('async error propagates through Lua code via pCallAsync', () async {
+        lua.registerAsync('asyncBoom', (LuaState ls) async {
+          await Future.delayed(Duration(milliseconds: 5));
+          throw StateError('async boom');
+        });
+
+        lua.doString('''
+          function willFail()
+            return asyncBoom()
+          end
+        ''');
+
+        lua.getGlobal('willFail');
+        final status = await lua.pCallAsync(0, 1, 0);
+        expect(status, equals(ThreadStatus.luaErrRun));
+        // Error message should mention the StateError
+        expect(lua.isString(-1), isTrue);
+      });
+
+      test('nested Lua function calling async Dart function', () async {
+        lua.registerAsync('asyncGreet', (LuaState ls) async {
+          await Future.delayed(Duration(milliseconds: 5));
+          ls.pushString('Hello, ${ls.toStr(1)}!');
+          return 1;
+        });
+
+        lua.doString('''
+          function inner(name)
+            return asyncGreet(name)
+          end
+          function outer(name)
+            return inner(name)
+          end
+        ''');
+
+        lua.getGlobal('outer');
+        lua.pushString('World');
+        final status = await lua.pCallAsync(1, 1, 0);
+        expect(status, equals(ThreadStatus.luaOk));
+        expect(lua.toStr(-1), equals('Hello, World!'));
+      });
+
+      test('sync call() throws descriptive error for async closures',
+          () async {
+        lua.registerAsync('asyncOnly', (LuaState ls) async {
+          ls.pushInteger(1);
+          return 1;
+        });
+
+        lua.getGlobal('asyncOnly');
+        // Synchronous call() should throw, not crash with null check
+        expect(() => lua.call(0, 1), throwsA(isA<Exception>()));
+      });
+    });
   });
 }
