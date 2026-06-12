@@ -1,7 +1,7 @@
-import 'package:lua_dardo_plus/lua.dart';
-import 'package:lua_dardo_plus/src/state/comparison.dart';
-import 'package:lua_dardo_plus/src/state/lua_state_impl.dart';
-import 'package:lua_dardo_plus/src/state/lua_value.dart';
+import 'package:luax/lua.dart';
+import 'package:luax/src/state/comparison.dart';
+import 'package:luax/src/state/lua_state_impl.dart';
+import 'package:luax/src/state/lua_value.dart';
 import 'package:test/test.dart';
 
 void main() {

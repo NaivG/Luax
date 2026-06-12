@@ -2,11 +2,11 @@
 
 ## Project Name
 
-**lua_dardo_plus** (LuaDardo Plus)
+**luax** (LuaDardo Plus fork)
 
 ## Overview
 
-LuaDardo Plus is a Lua 5.3 virtual machine implemented entirely in pure Dart. It is a maintained fork chain of the original LuaDardo project, with added support for async functions, goto/label syntax, an exposed parser and AST for static analysis tooling, and web platform compatibility.
+Luax is a Lua 5.3 virtual machine implemented entirely in pure Dart. It is a maintained fork of the original LuaDardo/LuaDardoPlus project, with added support for async functions, goto/label syntax, an exposed parser and AST for static analysis tooling, and web platform compatibility.
 
 ## Key Technologies
 
@@ -123,7 +123,7 @@ The parser and AST are exposed as a first-class surface via `lib/lua_parser.dart
 
 ### Async Functions
 
-LuaDardo Plus extends the Lua VM with async function support, allowing Dart `Future`-based operations to be called from Lua scripts. Tests are in `test/async/`.
+Luax extends the Lua VM with async function support, allowing Dart `Future`-based operations to be called from Lua scripts. Tests are in `test/async/`.
 
 ### Web Platform Support
 
@@ -152,19 +152,19 @@ Performance-sensitive code has benchmarks in `test/perf/` covering the lexer, st
 ### Using the public API
 
 ```dart
-import 'package:lua_dardo_plus/lua.dart';
+import 'package:luax/lua.dart';
 ```
 
 ### Using the parser for static analysis
 
 ```dart
-import 'package:lua_dardo_plus/lua_parser.dart';
+import 'package:luax/lua_parser.dart';
 ```
 
 ### Using debug utilities
 
 ```dart
-import 'package:lua_dardo_plus/debug.dart';
+import 'package:luax/debug.dart';
 ```
 
 ### Adding a new stdlib function

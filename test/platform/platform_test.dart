@@ -1,5 +1,5 @@
-import 'package:lua_dardo_plus/lua.dart';
-import 'package:lua_dardo_plus/src/platform/platform.dart';
+import 'package:luax/lua.dart';
+import 'package:luax/src/platform/platform.dart';
 import 'package:test/test.dart';
 
 void main() {

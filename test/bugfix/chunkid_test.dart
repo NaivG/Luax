@@ -1,5 +1,5 @@
-import 'package:lua_dardo_plus/lua.dart';
-import 'package:lua_dardo_plus/src/state/lua_stack.dart';
+import 'package:luax/lua.dart';
+import 'package:luax/src/state/lua_stack.dart';
 import 'package:test/test.dart';
 
 /// Verifies that runtime error messages don't embed the entire script source

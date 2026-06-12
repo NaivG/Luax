@@ -1,5 +1,5 @@
-import 'package:lua_dardo_plus/lua.dart';
-import 'package:lua_dardo_plus/src/stdlib/lua_pattern.dart';
+import 'package:luax/lua.dart';
+import 'package:luax/src/stdlib/lua_pattern.dart';
 import 'package:test/test.dart';
 
 /// Exercises features that the previous RegExp-based pattern translator

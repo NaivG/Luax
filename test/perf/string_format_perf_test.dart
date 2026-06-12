@@ -6,8 +6,8 @@
 // Run:
 //   dart run test/perf/string_format_perf_test.dart
 
-import 'package:lua_dardo_plus/lua.dart';
-import 'package:lua_dardo_plus/src/stdlib/string_lib.dart';
+import 'package:luax/lua.dart';
+import 'package:luax/src/stdlib/string_lib.dart';
 
 import 'perf_tester.dart';
 

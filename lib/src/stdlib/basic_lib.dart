@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import '../api/lua_state.dart';
 import '../api/lua_type.dart';
 import '../platform/platform.dart';
+import '../state/lua_state_impl.dart';
 
 class BasicLib {
   static const Map<String, DartFunction?> _baseFuncs = {
@@ -28,6 +29,7 @@ class BasicLib {
     "type": _baseType,
     "tostring": _baseToString,
     "tonumber": _baseToNumber,
+    "collectgarbage": _baseCollectGarbage,
     /* placeholders */
     "_G": null,
     "_VERSION": null
@@ -422,5 +424,70 @@ class BasicLib {
     /* else not a number */
     ls.pushNil(); /* not a number */
     return 1;
+  }
+
+// collectgarbage ([opt [, arg]])
+// http://www.lua.org/manual/5.3/manual.html#pdf-collectgarbage
+// lua-5.3.4/src/lbaselib.c#luaB_collectgarbage()
+  static int _baseCollectGarbage(LuaState ls) {
+    final impl = ls as LuaStateImpl;
+    final gc = impl.gc;
+    String opt = ls.optString(1, "collect")!;
+    switch (opt) {
+      case "collect":
+        gc.fullCycle();
+        ls.pushInteger(0);
+        return 1;
+      case "stop":
+        gc.stop();
+        ls.pushInteger(0);
+        return 1;
+      case "restart":
+        gc.restart();
+        ls.pushInteger(0);
+        return 1;
+      case "count":
+        final kb = gc.totalBytes / 1024;
+        ls.pushNumber(kb);
+        return 1;
+      case "step":
+        final arg = ls.optInteger(2, 0) ?? 0;
+        final result = gc.step(arg);
+        ls.pushBoolean(result);
+        return 1;
+      case "setpause":
+        final arg = ls.checkInteger(2)!;
+        final old = gc.pause;
+        gc.pause = arg;
+        ls.pushInteger(old);
+        return 1;
+      case "setstepmul":
+        final arg = ls.checkInteger(2)!;
+        final old = gc.stepMul;
+        gc.stepMul = arg;
+        ls.pushInteger(old);
+        return 1;
+      case "isrunning":
+        ls.pushBoolean(gc.isRunning);
+        return 1;
+      case "info":
+        final infoMap = gc.info();
+        ls.createTable(0, infoMap.length);
+        for (final entry in infoMap.entries) {
+          final key = entry.key;
+          final val = entry.value;
+          if (val is num) {
+            ls.pushNumber(val.toDouble());
+          } else if (val is bool) {
+            ls.pushBoolean(val);
+          } else {
+            ls.pushString(val.toString());
+          }
+          ls.setField(-2, key);
+        }
+        return 1;
+      default:
+        return ls.argError(1, "invalid option '$opt'");
+    }
   }
 }

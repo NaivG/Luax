@@ -28,6 +28,15 @@ class LuaStack {
   /// Program Counter
   int pc = 0;
 
+  /// The upper bound for GC root tracing.
+  ///
+  /// For Lua closures this is set to the function's `maxStackSize` so that
+  /// the GC can see all compiler-allocated registers — including ones whose
+  /// values become stale after the push/pop calling convention reduces
+  /// [_top].  For Dart closures and API-level stack frames it defaults to
+  /// [_top] (no separate tracking needed).
+  int gcTop = -1;
+
   /// linked list
   LuaStack? prev;
 

@@ -2,8 +2,11 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:lua_dardo_plus/src/state/lua_userdata.dart';
-import 'package:lua_dardo_plus/src/stdlib/os_lib.dart';
+import 'lua_userdata.dart';
+import '../stdlib/os_lib.dart';
+import '../gc/garbage_collector.dart';
+import '../gc/gc_constants.dart';
+import '../gc/gc_object.dart';
 import '../platform/platform.dart';
 
 import '../stdlib/math_lib.dart';
@@ -39,7 +42,7 @@ int _threadIdCounter = 0;
 /// Generates a new unique thread ID
 int _genThreadId() => ++_threadIdCounter;
 
-class LuaStateImpl implements LuaState, LuaVM {
+class LuaStateImpl with GCObject implements LuaState, LuaVM {
   /// Controls the bytecode dispatch strategy.
   ///
   /// When `false` (default), uses the original indirect-function dispatch
@@ -80,23 +83,49 @@ class LuaStateImpl implements LuaState, LuaVM {
   /// Unique thread ID
   int id = 0;
 
+  /// Garbage collector (owned by the main thread; shared threads reference
+  /// the same instance via [registry]).
+  late final LuaGarbageCollector _gc;
+
+  /// Public accessor for the GC.
+  LuaGarbageCollector get gc => _gc;
+
   LuaStateImpl() {
+    // Set this GC as current BEFORE creating any LuaTable objects so they
+    // auto-register via their constructors.
+    _gc = LuaGarbageCollector(this);
+    LuaGarbageCollector.current = _gc;
+
+    // Re-create registry & globals now that GC is active.
+    registry = LuaTable(0, 0);
     registry!.put(luaRidxGlobals, LuaTable(0, 0));
+
     LuaStack stack = _newStack();
     stack.state = this;
     _pushLuaStack(stack);
     id = _genThreadId();
     _updateThreadCache(id);
+
+    // Register this thread itself as a GC object.
+    _gc.register(this);
   }
 
   /// Constructor for creating a new thread (coroutine) that shares the registry
   LuaStateImpl.newThread(LuaTable registry) {
     this.registry = registry;
+
+    // Inherit the GC from the registry's owning state.
+    // The registry was created by the main thread's GC, so
+    // LuaGarbageCollector.current should already be set.
+    _gc = LuaGarbageCollector.current ?? LuaGarbageCollector(this);
+
     LuaStack stack = _newStack();
     stack.state = this;
     _pushLuaStack(stack);
     id = _genThreadId();
     _updateThreadCache(id);
+
+    _gc.register(this);
   }
 
   /// Updates the thread cache with this thread
@@ -683,6 +712,7 @@ class LuaStateImpl implements LuaState, LuaVM {
     // run closure
     _pushLuaStack(newStack);
     setTop(nRegs);
+    newStack.gcTop = nRegs;
     _runLuaClosure();
     _popLuaStack();
 
@@ -718,6 +748,7 @@ class LuaStateImpl implements LuaState, LuaVM {
     // run closure (async-aware instruction loop)
     _pushLuaStack(newStack);
     setTop(nRegs);
+    newStack.gcTop = nRegs;
     await _runLuaClosureAsync();
     _popLuaStack();
 
@@ -740,20 +771,32 @@ class LuaStateImpl implements LuaState, LuaVM {
     }
     _stack!.pop();
 
-    // run closure
-    _pushLuaStack(newStack);
-    int r = c.dartFunc!.call(this);
-    _popLuaStack();
+    // run closure (with GC scope guard so objects created inside the
+    // Dart callback are tracked)
+    final prevGc = LuaGarbageCollector.current;
+    LuaGarbageCollector.current = _gc;
+    try {
+      _pushLuaStack(newStack);
+      int r = c.dartFunc!.call(this);
+      _popLuaStack();
 
-    // return results
-    if (nResults != 0) {
-      List<Object?> results = newStack.popN(r);
-      //stack.check(results.size())
-      _stack!.pushN(results, nResults);
+      // return results
+      if (nResults != 0) {
+        List<Object?> results = newStack.popN(r);
+        //stack.check(results.size())
+        _stack!.pushN(results, nResults);
+      }
+    } finally {
+      LuaGarbageCollector.current = prevGc;
     }
   }
 
   void _runLuaClosure() {
+    // Set GC scope so objects created during VM execution are tracked.
+    final prevGc = LuaGarbageCollector.current;
+    LuaGarbageCollector.current = _gc;
+    int gcCounter = 0;
+    try {
     // Optimised dispatch loop that replaces the original triple overhead
     // (array lookup → indirect Function.call → string comparison) with a
     // single `switch` on the raw 6-bit opcode. ~10% perf win.
@@ -901,6 +944,14 @@ class LuaStateImpl implements LuaState, LuaVM {
         case 46:
           break; // EXTRAARG — consumed by preceding instruction
       }
+      // Periodically check GC debt.
+      if (++gcCounter >= GcConstants.instructionInterval) {
+        gcCounter = 0;
+        _gc.checkDebt();
+      }
+    }
+    } finally {
+      LuaGarbageCollector.current = prevGc;
     }
   }
 
@@ -911,6 +962,10 @@ class LuaStateImpl implements LuaState, LuaVM {
   /// closure, `await` the call through [callAsync] instead of going through
   /// the synchronous [call] path (which would crash on `dartFunc!`).
   Future<void> _runLuaClosureAsync() async {
+    final prevGc = LuaGarbageCollector.current;
+    LuaGarbageCollector.current = _gc;
+    int gcCounter = 0;
+    try {
     for (;;) {
       final int inst = fetch();
       switch (inst & 0x3F) {
@@ -981,6 +1036,14 @@ class LuaStateImpl implements LuaState, LuaVM {
         case 45: Instructions.vararg(inst, this);   break;
         case 46: break; // EXTRAARG
       }
+      // Periodically check GC debt.
+      if (++gcCounter >= GcConstants.instructionInterval) {
+        gcCounter = 0;
+        _gc.checkDebt();
+      }
+    }
+    } finally {
+      LuaGarbageCollector.current = prevGc;
     }
   }
 
@@ -1096,15 +1159,21 @@ class LuaStateImpl implements LuaState, LuaVM {
     }
     _stack!.pop();
 
-    // run closure
-    _pushLuaStack(newStack);
-    int r = await c.dartFuncAsync!.call(this);
-    _popLuaStack();
+    // run closure (with GC scope guard)
+    final prevGc = LuaGarbageCollector.current;
+    LuaGarbageCollector.current = _gc;
+    try {
+      _pushLuaStack(newStack);
+      int r = await c.dartFuncAsync!.call(this);
+      _popLuaStack();
 
-    // return results
-    if (nResults != 0) {
-      List<Object?> results = newStack.popN(r);
-      _stack!.pushN(results, nResults);
+      // return results
+      if (nResults != 0) {
+        List<Object?> results = newStack.popN(r);
+        _stack!.pushN(results, nResults);
+      }
+    } finally {
+      LuaGarbageCollector.current = prevGc;
     }
   }
 
@@ -2084,6 +2153,71 @@ class LuaStateImpl implements LuaState, LuaVM {
   @override
   void setHook(HookContext context) {
     hookList.add(context);
+  }
+
+//**************************************************
+//****************** GC Support ********************
+//**************************************************
+
+  /// Push an arbitrary object onto the stack (used by the GC to invoke
+  /// __gc metamethods). Not part of the public API.
+  void pushObjectRaw(Object? obj) {
+    _stack!.push(obj);
+  }
+
+//**************************************************
+//**************************************************
+//**************************************************
+
+//**************************************************
+//****************** GCObject **********************
+//**************************************************
+
+  @override
+  int get estimatedSize {
+    // Base overhead for the thread object itself.
+    // The call-stack chain is accounted for by the Closure and LuaTable
+    // objects that live on each stack frame.
+    return 96;
+  }
+
+  @override
+  void traceReferences(void Function(GCObject obj) visit) {
+    // Walk the entire call-stack chain of this thread.
+    LuaStack? s = _stack;
+    while (s != null) {
+      if (s.closure != null) visit(s.closure!);
+
+      // Stack slots — use gcTop when available (Lua closure frames) so
+      // that the GC sees all compiler-allocated registers, even when the
+      // push/pop calling convention has temporarily reduced _top below
+      // maxStackSize.  For Dart closure and API frames gcTop is -1 and
+      // we fall back to the operational top.
+      final traceTop = s.gcTop >= 0 ? s.gcTop : s.top();
+      for (int i = 0; i < traceTop; i++) {
+        final v = s.slots[i];
+        if (v is GCObject) visit(v);
+      }
+
+      // Varargs.
+      if (s.varargs != null) {
+        for (final v in s.varargs!) {
+          if (v is GCObject) visit(v);
+        }
+      }
+
+      // Open upvalues.
+      if (s.openuvs != null) {
+        for (final uv in s.openuvs!.values) {
+          if (uv != null) {
+            final v = uv.get();
+            if (v is GCObject) visit(v);
+          }
+        }
+      }
+
+      s = s.prev;
+    }
   }
 
 //**************************************************

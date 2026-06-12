@@ -1,6 +1,8 @@
-# LuaDardo Plus
+# Luax
 
-![LuaDardo Plus Hero](assets/images/hero.png)
+![Luax Hero](assets/images/hero.png)
+
+---
 
 A pure-Dart implementation of the Lua 5.3 virtual machine — actively maintained, performance-tuned, and feature-complete.
 
@@ -8,14 +10,18 @@ A pure-Dart implementation of the Lua 5.3 virtual machine — actively maintaine
 
 ## About
 
-LuaDardo Plus is a maintained fork chain of [LuaDardo](https://github.com/arcticfox1919/LuaDardo), the original Lua 5.3 VM written in pure Dart.
+Luax is a maintained fork of [LuaDardo Plus](https://github.com/ImL1s/LuaDardo) (which was a [LuaDardo](https://github.com/arcticfox1919/LuaDardo) fork) , the original Lua 5.3 VM written in pure Dart.
 
 | Stage | Maintainer | Highlights |
 |-------|-----------|------------|
 | [LuaDardo](https://github.com/arcticfox1919/LuaDardo) | arcticfox1919 | Original Lua 5.3 VM implementation |
 | [LuaDardo Plus](https://github.com/ImL1s/LuaDardo) | ImL1s | Bug fixes (#13, #24, #33, #34, #36), web support, async functions, coroutines |
 | [Telosnex fork](https://github.com/Telosnex/LuaDardo) | Telosnex / jpohhhh | goto/label, 40+ bug fixes, major performance work, parser restructure, Lua 5.3 pattern matcher |
-| LuaDardo (this repo) | NaivG | Ongoing maintenance and development |
+| Luax (this repo) | NaivG | Ongoing maintenance and development, bug fixes (#7) |
+
+> [!important]
+> Starting from commit [a2576f](https://github.com/NaivG/Luax/commit/a25676f0ad6cfcf0234b4bbda053165ece882b91), Luax will be separated from LuaDardo's fork network for better development.
+> But you can still use Luax as a fork of LuaDardo.
 
 ## Features
 
@@ -32,8 +38,8 @@ LuaDardo Plus is a maintained fork chain of [LuaDardo](https://github.com/arctic
 
 ```yaml
 dependencies:
-  lua_dardo_plus:
-    git: https://github.com/NaivG/LuaDardo.git
+  luax:
+    git: https://github.com/NaivG/Luax.git
 ```
 
 ```bash
@@ -43,7 +49,7 @@ dart pub get
 ## Quick Start
 
 ```dart
-import 'package:lua_dardo_plus/lua.dart';
+import 'package:luax/lua.dart';
 
 void main() {
   final state = LuaState.newState();
@@ -267,7 +273,7 @@ print(f2())  -- 3
 The parser and AST are exposed as a separate library for building static analysis tools:
 
 ```dart
-import 'package:lua_dardo_plus/lua_parser.dart';
+import 'package:luax/lua_parser.dart';
 
 void main() {
   final parser = Parser('print("hello")', 'example.lua');
@@ -279,7 +285,7 @@ void main() {
 A debug utility is also available for inspecting the Lua stack at runtime:
 
 ```dart
-import 'package:lua_dardo_plus/debug.dart';
+import 'package:luax/debug.dart';
 
 state.printStack();  // Prints stack contents with types and values
 ```
@@ -299,7 +305,7 @@ Significant performance improvements over the upstream LuaDardo Plus v0.3.0:
 
 ## Flutter Integration
 
-For a full example of integrating LuaDardo Plus into a Flutter application with Riverpod state management, see the [Flutter Lua Example](https://github.com/ImL1s/flutter_lua_example).
+For a full example of integrating Luax into a Flutter application with Riverpod state management, see the [Flutter Lua Example](https://github.com/ImL1s/flutter_lua_example).
 
 ### Architecture
 
@@ -311,11 +317,11 @@ For a full example of integrating LuaDardo Plus into a Flutter application with 
 
 ## Web Platform Support
 
-LuaDardo Plus runs in browsers via a platform abstraction layer that handles `dart:io` dependencies:
+Luax runs in browsers via a platform abstraction layer that handles `dart:io` dependencies:
 
 ```dart
-import 'package:lua_dardo_plus/lua.dart';
-import 'package:lua_dardo_plus/src/platform/platform.dart';
+import 'package:luax/lua.dart';
+import 'package:luax/src/platform/platform.dart';
 
 void main() {
   // Redirect print output (useful for web)
@@ -329,15 +335,15 @@ void main() {
 
 **Web limitations:** `os.execute()`, `os.exit()`, `os.remove()`, `os.rename()`, and `os.getenv()` throw `UnsupportedError`. Time functions (`os.time`, `os.clock`, `os.date`, `os.difftime`) work normally. File loading (`doFile`, `loadFile`) is not supported on web.
 
-## Migration from lua_dardo
+## Migration from lua_dardo/lua_dardo_plus
 
 Update your dependency and import:
 
 ```yaml
 # pubspec.yaml
 dependencies:
-  lua_dardo_plus:
-    git: https://github.com/NaivG/LuaDardo.git
+  luax:
+    git: https://github.com/NaivG/Luax.git
 ```
 
 ```dart
@@ -345,14 +351,14 @@ dependencies:
 import 'package:lua_dardo/lua.dart';
 
 // After
-import 'package:lua_dardo_plus/lua.dart';
+import 'package:luax/lua.dart';
 ```
 
 Additional imports available:
 
 ```dart
-import 'package:lua_dardo_plus/lua_parser.dart';  // Parser & AST
-import 'package:lua_dardo_plus/debug.dart';        // Debug utilities
+import 'package:luax/lua_parser.dart';  // Parser & AST
+import 'package:luax/debug.dart';        // Debug utilities
 ```
 
 ## License

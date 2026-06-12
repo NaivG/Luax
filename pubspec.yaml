@@ -1,9 +1,9 @@
-name: lua_dardo_plus
-description: A pure-Dart Lua 5.3 VM with goto/label, async interop, exposed parser/AST, web support, and significant performance improvements over upstream LuaDardo.
+name: luax
+description: A pure-Dart Lua 5.3 VM with extra feature, and improvements over upstream LuaDardo/LuaDardoPlus.
 version: 0.3.1
-homepage: https://github.com/NaivG/LuaDardo
-repository: https://github.com/NaivG/LuaDardo
-issue_tracker: https://github.com/NaivG/LuaDardo/issues
+homepage: https://github.com/NaivG/Luax
+repository: https://github.com/NaivG/Luax
+issue_tracker: https://github.com/NaivG/Luax/issues
 # TODO: due to sprintf being a git dep
 publish_to: none
 environment:

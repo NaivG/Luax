@@ -1,8 +1,10 @@
 import 'dart:collection';
 
+import '../gc/garbage_collector.dart';
+import '../gc/gc_object.dart';
 import '../number/lua_number.dart';
 
-class LuaTable {
+class LuaTable with GCObject {
   /// 元表
   LuaTable? metatable;
   List<Object?>? arr;
@@ -20,6 +22,7 @@ class LuaTable {
     if (nRec > 0) {
       map = HashMap<Object?, Object>();
     }
+    LuaGarbageCollector.current?.register(this);
   }
 
   bool hasMetafield(String fieldName) {
@@ -163,5 +166,37 @@ class LuaTable {
       }
     }
     lastKey = key;
+  }
+
+  // ── GCObject implementation ──────────────────────────────────────
+
+  @override
+  int get estimatedSize {
+    int size = 64; // object header + field pointers
+    if (arr != null) size += 24 + arr!.length * 8;
+    if (map != null) size += 48 + map!.length * 32;
+    if (keys != null) size += 48 + keys!.length * 16;
+    return size < 32 ? 32 : size;
+  }
+
+  @override
+  void traceReferences(void Function(GCObject obj) visit) {
+    // Metatable is always a strong reference.
+    if (metatable != null) visit(metatable!);
+
+    // Array values.
+    if (arr != null) {
+      for (final v in arr!) {
+        if (v is GCObject) visit(v);
+      }
+    }
+
+    // Hash map: keys and values can both be GCObjects.
+    if (map != null) {
+      for (final entry in map!.entries) {
+        if (entry.key is GCObject) visit(entry.key as GCObject);
+        if (entry.value is GCObject) visit(entry.value as GCObject);
+      }
+    }
   }
 }

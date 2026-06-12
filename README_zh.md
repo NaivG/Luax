@@ -1,6 +1,6 @@
-# LuaDardo Plus
+# Luax
 
-![LuaDardo Plus Hero](assets/images/hero.png)
+![Luax Hero](assets/images/hero.png)
 
 纯 Dart 实现的 Lua 5.3 虚拟机 — 持续维护、性能优化、功能完整。
 
@@ -8,14 +8,18 @@
 
 ## 关于本项目
 
-LuaDardo Plus 是 [LuaDardo](https://github.com/arcticfox1919/LuaDardo)（纯 Dart 编写的 Lua 5.3 虚拟机）的维护分支链。
+Luax是[LuaDardo Plus](https://github.com/ImL1s/LuaDardo)（其本身是[LuaDardo](https://github.com/arcticfox1919/LuaDardo)的一个分支）的一个维护分支，它是用纯Dart编写的原始Lua 5.3虚拟机。
 
 | 阶段 | 维护者 | 主要内容 |
 |------|--------|---------|
 | [LuaDardo](https://github.com/arcticfox1919/LuaDardo) | arcticfox1919 | 原始 Lua 5.3 VM 实现 |
 | [LuaDardo Plus](https://github.com/ImL1s/LuaDardo) | ImL1s | Bug 修复（#13, #24, #33, #34, #36）、Web 支持、异步函数、协程 |
 | [Telosnex 分支](https://github.com/Telosnex/LuaDardo) | Telosnex / jpohhhh | goto/label、40+ bug 修复、大幅性能优化、解析器重构、Lua 5.3 模式匹配器 |
-| LuaDardo（本仓库） | NaivG | 持续维护与开发 |
+| Luax（本仓库） | NaivG | 持续维护与开发, Bug 修复 （#7） |
+
+> [!important]
+> 从提交[a2576f](https://github.com/NaivG/Luax/commit/a25676f0ad6cfcf0234b4bbda053165ece882b91)开始，为了更好的开发，Luax将从LuaDardo的分支网络中分离出来。
+> 但你仍然可以将Luax作为LuaDardo的一个分支来使用。
 
 ## 特性
 
@@ -32,8 +36,8 @@ LuaDardo Plus 是 [LuaDardo](https://github.com/arcticfox1919/LuaDardo)（纯 Da
 
 ```yaml
 dependencies:
-  lua_dardo_plus:
-    git: https://github.com/NaivG/LuaDardo.git
+  luax:
+    git: https://github.com/NaivG/Luax.git
 ```
 
 ```bash
@@ -43,7 +47,7 @@ dart pub get
 ## 快速开始
 
 ```dart
-import 'package:lua_dardo_plus/lua.dart';
+import 'package:luax/lua.dart';
 
 void main() {
   final state = LuaState.newState();
@@ -267,7 +271,7 @@ print(f2())  -- 3
 解析器和 AST 作为独立库公开，用于构建静态分析工具：
 
 ```dart
-import 'package:lua_dardo_plus/lua_parser.dart';
+import 'package:luax/lua_parser.dart';
 
 void main() {
   final parser = Parser('print("hello")', 'example.lua');
@@ -279,7 +283,7 @@ void main() {
 还提供了调试工具用于在运行时检查 Lua 栈：
 
 ```dart
-import 'package:lua_dardo_plus/debug.dart';
+import 'package:luax/debug.dart';
 
 state.printStack();  // 打印栈内容，包含类型和值
 ```
@@ -299,7 +303,7 @@ state.printStack();  // 打印栈内容，包含类型和值
 
 ## Flutter 集成
 
-关于如何将 LuaDardo Plus 集成到带有 Riverpod 状态管理的 Flutter 应用中，请参阅 [Flutter Lua 示例](https://github.com/ImL1s/flutter_lua_example)。
+关于如何将 Luax 集成到带有 Riverpod 状态管理的 Flutter 应用中，请参阅 [Flutter Lua 示例](https://github.com/ImL1s/flutter_lua_example)。
 
 ### 架构
 
@@ -311,11 +315,11 @@ state.printStack();  // 打印栈内容，包含类型和值
 
 ## Web 平台支持
 
-LuaDardo Plus 通过平台抽象层处理 `dart:io` 依赖，支持在浏览器中运行：
+Luax 通过平台抽象层处理 `dart:io` 依赖，支持在浏览器中运行：
 
 ```dart
-import 'package:lua_dardo_plus/lua.dart';
-import 'package:lua_dardo_plus/src/platform/platform.dart';
+import 'package:luax/lua.dart';
+import 'package:luax/src/platform/platform.dart';
 
 void main() {
   // 自定义 print 输出（在 Web 上很有用）
@@ -329,15 +333,15 @@ void main() {
 
 **Web 限制：** `os.execute()`、`os.exit()`、`os.remove()`、`os.rename()`、`os.getenv()` 会抛出 `UnsupportedError`。时间函数（`os.time`、`os.clock`、`os.date`、`os.difftime`）正常工作。Web 平台不支持文件加载（`doFile`、`loadFile`）。
 
-## 从 lua_dardo 迁移
+## 从 lua_dardo/lua_dardo_plus 迁移
 
 更新依赖和导入：
 
 ```yaml
 # pubspec.yaml
 dependencies:
-  lua_dardo_plus:
-    git: https://github.com/NaivG/LuaDardo.git
+  luax:
+    git: https://github.com/NaivG/Luax.git
 ```
 
 ```dart
@@ -345,14 +349,14 @@ dependencies:
 import 'package:lua_dardo/lua.dart';
 
 // 之后
-import 'package:lua_dardo_plus/lua.dart';
+import 'package:luax/lua.dart';
 ```
 
 可用的额外导入：
 
 ```dart
-import 'package:lua_dardo_plus/lua_parser.dart';  // 解析器 & AST
-import 'package:lua_dardo_plus/debug.dart';        // 调试工具
+import 'package:luax/lua_parser.dart';  // 解析器 & AST
+import 'package:luax/debug.dart';        // 调试工具
 ```
 
 ## 许可证

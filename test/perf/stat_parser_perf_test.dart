@@ -16,10 +16,10 @@
 // With CPU profiling:
 //   dart run --enable-vm-service test/perf/stat_parser_perf_test.dart
 
-import 'package:lua_dardo_plus/src/compiler/ast/block.dart';
-import 'package:lua_dardo_plus/src/compiler/ast/stat.dart';
-import 'package:lua_dardo_plus/src/compiler/parser/parser.dart';
-import 'package:lua_dardo_plus/src/compiler/parser/stat_parser.dart';
+import 'package:luax/src/compiler/ast/block.dart';
+import 'package:luax/src/compiler/ast/stat.dart';
+import 'package:luax/src/compiler/parser/parser.dart';
+import 'package:luax/src/compiler/parser/stat_parser.dart';
 
 import 'perf_tester.dart';
 

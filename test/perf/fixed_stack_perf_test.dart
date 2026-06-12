@@ -14,8 +14,8 @@
 // With CPU profiling:
 //   dart run --enable-vm-service test/perf/fixed_stack_perf_test.dart
 
-import 'package:lua_dardo_plus/lua.dart';
-import 'package:lua_dardo_plus/src/state/lua_state_impl.dart';
+import 'package:luax/lua.dart';
+import 'package:luax/src/state/lua_state_impl.dart';
 
 import 'perf_tester.dart';
 

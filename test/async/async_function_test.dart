@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'package:lua_dardo_plus/lua.dart';
+import 'package:luax/lua.dart';
 import 'package:test/test.dart';
 
 void main() {

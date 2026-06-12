@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Incremental mark-and-sweep garbage collector (`LuaGarbageCollector`) compatible with Lua 5.3 semantics — tri-color marking, debt-based pacing, `__gc` finalizer support for tables and userdata, and full `collectgarbage()` API (`"collect"`, `"stop"`, `"restart"`, `"count"`, `"step"`, `"setpause"`, `"setstepmul"`, `"isrunning"`, `"info"`).
 - Async call path for Lua closures and async Dart functions, enabling non-blocking interop between the two runtimes.
 - Exposed the parser and AST via `lua_parser.dart`, allowing external tooling to parse and inspect Lua source.
 - `goto`/`label` statements with forward and backward jumps following Lua 5.2+ scoping rules.
@@ -19,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `LuaTable`, `Closure`, `Userdata`, and `LuaStateImpl` now mix in `GCObject` for tri-color mark-and-sweep tracking; the VM loop checks GC debt at regular intervals.
+- Renamed package from `lua_dardo_plus` to `luax`
 - Parser is approximately 47% faster end-to-end via lexer and statement-parser tuning.
 - `StatParser` is approximately 12% faster through the use of records and pre-sized lists.
 - `sprintf` fork delivers roughly 5x speedup; simple format specifiers bypass `sprintf` entirely for an additional 3.7x gain.
@@ -98,6 +101,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Tests
 
+- GC unit tests and incremental state-machine tests (tri-color marking, cycle counting, `__gc` finalizers, debt-based pacing, `collectgarbage` API).
 - 56 gremlin torture tests for `goto`/`label` (forward jumps, backward jumps, upvalue closing, shadowing).
 - Glados property-based tests for math, table, operators, and coroutines.
 - Edge-case tests for `string.find`.

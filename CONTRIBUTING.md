@@ -1,4 +1,4 @@
-# Contributing to LuaDardo Plus
+# Contributing to Luax
 
 ## Fork Lineage
 
@@ -11,23 +11,29 @@ arcticfox1919/LuaDardo (original)
        ▼
    Telosnex/LuaDardo (Telosnex fork)
        │
+    (unlinked)
+       │
        ▼
-   NaivG/LuaDardo (this repo)
+   NaivG/Luax (this repo)
 ```
+
+> [!important]
+> Starting from commit [a2576f](https://github.com/NaivG/Luax/commit/a25676f0ad6cfcf0234b4bbda053165ece882b91), Luax will be separated from LuaDardo's fork network for better development.
+> But you can still use Luax as a fork of LuaDardo.
 
 | Repository | Maintainer | Role |
 |-----------|-----------|------|
 | `arcticfox1919/LuaDardo` | arcticfox1919 | Original Lua 5.3 VM (inactive since July 2023) |
 | `ImL1s/LuaDardo` | ImL1s | Bug fixes, web support, async functions, coroutines |
 | `Telosnex/LuaDardo` | jpohhhh | goto/label, performance, parser restructure, 40+ bug fixes |
-| `NaivG/LuaDardo` | NaivG | Current development (this repo) |
+| `NaivG/Luax` | NaivG | Current development (this repo) |
 
 ## Development Setup
 
 ```bash
 # Clone the repository
-git clone https://github.com/NaivG/LuaDardo.git
-cd LuaDardo
+git clone https://github.com/NaivG/Luax.git
+cd Luax
 
 # Install dependencies
 dart pub get

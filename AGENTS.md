@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**lua_dardo_plus** (LuaDardo Plus) is a Lua 5.3 virtual machine implemented in pure Dart. It is a maintained fork that adds async function support, goto/label syntax, an exposed parser/AST for static analysis, and web platform compatibility.
+**luax** (LuaDardo Plus fork) is a Lua 5.3 virtual machine implemented in pure Dart. It is a maintained fork that adds async function support, goto/label syntax, an exposed parser/AST for static analysis, and web platform compatibility.
 
 ## Project Structure
 
