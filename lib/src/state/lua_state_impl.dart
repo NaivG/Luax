@@ -759,6 +759,33 @@ class LuaStateImpl with GCObject implements LuaState, LuaVM {
     }
   }
 
+  // ── GC scope helpers ────────────────────────────────────────────────
+  //
+  // Save/restore the static [LuaGarbageCollector.current] pointer so that
+  // objects allocated during VM execution (or inside Dart callbacks) are
+  // tracked by *this* state's collector.  The async variant correctly
+  // handles re-entrant await points between interleaved coroutine states.
+
+  T _withGcScope<T>(T Function() body) {
+    final prevGc = LuaGarbageCollector.current;
+    LuaGarbageCollector.current = _gc;
+    try {
+      return body();
+    } finally {
+      LuaGarbageCollector.current = prevGc;
+    }
+  }
+
+  Future<T> _withGcScopeAsync<T>(Future<T> Function() body) async {
+    final prevGc = LuaGarbageCollector.current;
+    LuaGarbageCollector.current = _gc;
+    try {
+      return await body();
+    } finally {
+      LuaGarbageCollector.current = prevGc;
+    }
+  }
+
   void _callDartClosure(int nArgs, int nResults, Closure c) {
     // create new lua stack
     LuaStack newStack = _newStack();
@@ -773,9 +800,7 @@ class LuaStateImpl with GCObject implements LuaState, LuaVM {
 
     // run closure (with GC scope guard so objects created inside the
     // Dart callback are tracked)
-    final prevGc = LuaGarbageCollector.current;
-    LuaGarbageCollector.current = _gc;
-    try {
+    _withGcScope(() {
       _pushLuaStack(newStack);
       int r = c.dartFunc!.call(this);
       _popLuaStack();
@@ -786,17 +811,13 @@ class LuaStateImpl with GCObject implements LuaState, LuaVM {
         //stack.check(results.size())
         _stack!.pushN(results, nResults);
       }
-    } finally {
-      LuaGarbageCollector.current = prevGc;
-    }
+    });
   }
 
   void _runLuaClosure() {
     // Set GC scope so objects created during VM execution are tracked.
-    final prevGc = LuaGarbageCollector.current;
-    LuaGarbageCollector.current = _gc;
+    _withGcScope(() {
     int gcCounter = 0;
-    try {
     // Optimised dispatch loop that replaces the original triple overhead
     // (array lookup → indirect Function.call → string comparison) with a
     // single `switch` on the raw 6-bit opcode. ~10% perf win.
@@ -950,9 +971,7 @@ class LuaStateImpl with GCObject implements LuaState, LuaVM {
         _gc.checkDebt();
       }
     }
-    } finally {
-      LuaGarbageCollector.current = prevGc;
-    }
+    });
   }
 
   /// Async-aware instruction loop.
@@ -962,10 +981,8 @@ class LuaStateImpl with GCObject implements LuaState, LuaVM {
   /// closure, `await` the call through [callAsync] instead of going through
   /// the synchronous [call] path (which would crash on `dartFunc!`).
   Future<void> _runLuaClosureAsync() async {
-    final prevGc = LuaGarbageCollector.current;
-    LuaGarbageCollector.current = _gc;
+    await _withGcScopeAsync(() async {
     int gcCounter = 0;
-    try {
     for (;;) {
       final int inst = fetch();
       switch (inst & 0x3F) {
@@ -1042,9 +1059,7 @@ class LuaStateImpl with GCObject implements LuaState, LuaVM {
         _gc.checkDebt();
       }
     }
-    } finally {
-      LuaGarbageCollector.current = prevGc;
-    }
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -1160,9 +1175,7 @@ class LuaStateImpl with GCObject implements LuaState, LuaVM {
     _stack!.pop();
 
     // run closure (with GC scope guard)
-    final prevGc = LuaGarbageCollector.current;
-    LuaGarbageCollector.current = _gc;
-    try {
+    await _withGcScopeAsync(() async {
       _pushLuaStack(newStack);
       int r = await c.dartFuncAsync!.call(this);
       _popLuaStack();
@@ -1172,9 +1185,7 @@ class LuaStateImpl with GCObject implements LuaState, LuaVM {
         List<Object?> results = newStack.popN(r);
         _stack!.pushN(results, nResults);
       }
-    } finally {
-      LuaGarbageCollector.current = prevGc;
-    }
+    });
   }
 
   /// Asynchronously call a function in protected mode.

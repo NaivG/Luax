@@ -33,6 +33,9 @@ enum GcPhase {
 const int luaGcInc = 0;
 
 /// Generational mode (accepted but treated as incremental).
+/// I guess... whatever. Would anyone use this?
+/// 
+/// TODO: Implement generational mode. And maybe a few other things.
 const int luaGcGen = 1;
 
 /// A Lua-level incremental garbage collector with `__gc` finalizer support
@@ -131,10 +134,11 @@ class LuaGarbageCollector {
     _running = false;
   }
 
-  /// Restart automatic collection and trigger a full cycle.
+  /// Restart automatic collection.
+  ///
+  /// Resumes the automatic collector; does **not** force a full collection cycle.
   void restart() {
     _running = true;
-    fullCycle();
   }
 
   /// Run a complete mark → sweep → finalize cycle synchronously.
@@ -158,7 +162,8 @@ class LuaGarbageCollector {
     _cycleCount++;
   }
 
-  /// A very large work value used for full-cycle operations.
+  /// A very large work value used for full-cycle operations like [fullCycle].
+  /// This SHOULD PROBABLY be larger than any reasonable amount of work.
   static const double _unlimitedWork = 1e18;
 
   /// Perform one incremental step.
@@ -194,11 +199,6 @@ class LuaGarbageCollector {
     _gcDebt = 0;
 
     _stepInternal(work);
-  }
-
-  /// Add to the GC debt (called when allocating memory).
-  void addDebt(int bytes) {
-    _gcDebt += bytes;
   }
 
   // ── Internal step state machine ────────────────────────────────────
@@ -275,11 +275,12 @@ class LuaGarbageCollector {
     }
   }
 
-  /// Incremental mark propagation.
+  /// Propagate gray marks through the object graph.
   ///
   /// Processes gray objects from the queue until the queue is empty or
-  /// [work] units have been consumed.
-  void _markStep(double work) {
+  /// [work] units have been consumed.  Returns `true` when the gray queue
+  /// is fully drained (i.e. propagation is complete).
+  bool _propagateGray(double work) {
     double remaining = work;
 
     while (_gray.isNotEmpty && remaining > 0) {
@@ -298,7 +299,15 @@ class LuaGarbageCollector {
       });
     }
 
-    if (_gray.isEmpty) {
+    return _gray.isEmpty;
+  }
+
+  /// Incremental mark propagation.
+  ///
+  /// Processes gray objects from the queue until the queue is empty or
+  /// [work] units have been consumed.
+  void _markStep(double work) {
+    if (_propagateGray(work)) {
       // Mark phase complete → transition to sweep.
       _startSweep();
     }
@@ -380,17 +389,7 @@ class LuaGarbageCollector {
         }
       }
       // Propagate marks through everything reachable from tobefnz.
-      while (_gray.isNotEmpty) {
-        final obj = _gray.removeLast();
-        if (!obj.isGray) continue;
-        obj.markBlack();
-        obj.traceReferences((child) {
-          if (child.isWhite) {
-            child.markGray();
-            _gray.add(child);
-          }
-        });
-      }
+      _propagateGray(_unlimitedWork);
     }
 
     // Compute survived bytes.
@@ -480,7 +479,7 @@ class LuaGarbageCollector {
       'objects': _allObjects.length,
       'tobefnz': _tobefnz.length,
       'isrunning': _running,
-      'mode': 'incremental',
+      'mode': _running ? 'incremental' : 'stopped',
       'phase': _phase.name,
     };
   }

@@ -73,6 +73,18 @@ void main() {
       expect(ls.toStr(-1), equals('incremental'));
     });
 
+    test('mode is "stopped" after collectgarbage("stop")', () {
+      final ls = LuaState.newState();
+      ls.openLibs();
+      ls.doString(r'''
+        collectgarbage("stop")
+        info = collectgarbage("info")
+        mode = info.mode
+      ''');
+      ls.getGlobal('mode');
+      expect(ls.toStr(-1), equals('stopped'));
+    });
+
     test('count matches collectgarbage("count")', () {
       final ls = LuaState.newState();
       ls.openLibs();
@@ -328,10 +340,24 @@ void main() {
     test('large number of finalizers', () {
       final ls = LuaState.newState();
       ls.openLibs();
-      // When loop and collectgarbage are in the same chunk, stale
-      // compiler-allocated registers keep the last iteration's table
-      // alive (standard Lua 5.3 behaviour: ci->top covers all registers).
-      // Verify that at least N-1 of N finalizers fire.
+      // ── Why we assert >= 99 rather than == 100 ──────────────────────
+      //
+      // When the loop and collectgarbage("collect") execute in the same
+      // chunk, the compiler allocates a register for the local `t` in the
+      // loop body.  After each iteration the register is logically dead,
+      // but the compiler does NOT emit an LNIL to clear it — the slot
+      // simply remains "allocated" until the function returns.
+      //
+      // In Lua 5.3 the GC roots include every register below ci->top of
+      // each active call frame.  During the mark phase the GC traces the
+      // entire register range [0..ci->top), which means the stale
+      // reference in the last-iteration register still keeps that table
+      // reachable.  Consequently only 99 of the 100 tables are detected
+      // as dead in this single-pass collection.
+      //
+      // This is standard Lua 5.3 semantics:
+      // any object whose register is still within ci->top but no longer
+      // referenced by live code will survive one collection cycle.
       ls.doString(r'''
         collectgarbage("stop")
         count = 0
@@ -348,9 +374,23 @@ void main() {
     test('all finalizers run when objects created in separate scope', () {
       final ls = LuaState.newState();
       ls.openLibs();
-      // When objects are created in one chunk and collected in another,
-      // the first chunk's stack frame is fully popped before the second
-      // runs, so no stale registers keep objects alive.
+      // ── Why splitting into two doString calls yields == 100 ──────────
+      //
+      // The first doString compiles and executes the loop, allocating
+      // registers for `t`.  When doString returns the chunk's call frame
+      // is popped: ci->top is restored to the caller's level and every
+      // register the chunk owned is effectively released.  No stale
+      // references survive.
+      //
+      // The second doString (collectgarbage("collect")) runs in a fresh
+      // call frame with its own register set — it has no knowledge of the
+      // tables created by the first chunk.  Therefore all 100 tables are
+      // unreachable and all 100 finalizers fire.
+      //
+      // Contrast with the preceding test where creation and collection
+      // share the same call frame, leaving one stale register alive.
+      //
+      // And i'm wondering if anyone has actually encountered this situation :P
       ls.doString(r'''
         collectgarbage("stop")
         count = 0
