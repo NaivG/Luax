@@ -1,0 +1,57 @@
+name: Analyze Dart Code
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Dart SDK
+        uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+
+      - name: Install dependencies
+        run: dart pub get
+
+      - name: Analyze project source
+        run: dart analyze --no-fatal-warnings
+
+      - name: Run tests
+        run: dart test
+      
+      - name: Formatting code
+        run: dart format .
+
+      - name: Commit Changes
+        id: commit
+        run: |
+          if [ -z "$(git status --porcelain)" ]; then 
+              exit 0
+          else
+            echo "::set-output name=status::success"
+            git add .
+            git config --local user.email "github-actions[bot]@users.noreply.github.com"
+            git config --local user.name "github-actions[bot]"
+            git commit -m "Format code for ${GITHUB_SHA}" -a
+          fi
+            
+      - name: GitHub Push
+        if: steps.commit.outputs.status == 'success' && !cancelled()
+        uses: ad-m/github-push-action@master
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ github.ref }}
+          
+      - name: Delete Workflow Runs
+        uses: GitRML/delete-workflow-runs@main
+        with:
+          retain_days: 30
+          keep_minimum_runs: 10
