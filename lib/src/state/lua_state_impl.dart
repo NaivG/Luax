@@ -14,6 +14,7 @@ import '../stdlib/package_lib.dart';
 import '../stdlib/string_lib.dart';
 import '../stdlib/table_lib.dart';
 import '../stdlib/coroutine_lib.dart';
+import '../stdlib/utf8_lib.dart';
 import 'package:sprintf/sprintf.dart';
 
 import '../number/lua_number.dart';
@@ -1703,6 +1704,7 @@ class LuaStateImpl with GCObject implements LuaState, LuaVM {
       "math": MathLib.openMathLib,
       "os": OSLib.openOSLib,
       "coroutine": CoroutineLib.openCoroutineLib,
+      "utf8": Utf8Lib.openUtf8Lib,
     };
 
     libs.forEach((name, fun) {
