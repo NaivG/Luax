@@ -4,26 +4,16 @@
 
 纯 Dart 实现的 Lua 5.3 虚拟机 — 持续维护、性能优化、功能完整。
 
-[English](README.md) | [简体中文](README_zh.md)
+[English](README.md) | 简体中文
 
-## 关于本项目
+## 关于
 
-Luax是[LuaDardo Plus](https://github.com/ImL1s/LuaDardo)（其本身是[LuaDardo](https://github.com/arcticfox1919/LuaDardo)的一个分支）的一个维护分支，它是用纯Dart编写的原始Lua 5.3虚拟机。
-
-| 阶段 | 维护者 | 主要内容 |
-|------|--------|---------|
-| [LuaDardo](https://github.com/arcticfox1919/LuaDardo) | arcticfox1919 | 原始 Lua 5.3 VM 实现 |
-| [LuaDardo Plus](https://github.com/ImL1s/LuaDardo) | ImL1s | Bug 修复（#13, #24, #33, #34, #36）、Web 支持、异步函数、协程 |
-| [Telosnex 分支](https://github.com/Telosnex/LuaDardo) | Telosnex / jpohhhh | goto/label、40+ bug 修复、大幅性能优化、解析器重构、Lua 5.3 模式匹配器 |
-| Luax（本仓库） | NaivG | 持续维护与开发, Bug 修复 （#7） |
-
-> [!important]
-> 从提交[a2576f](https://github.com/NaivG/Luax/commit/a25676f0ad6cfcf0234b4bbda053165ece882b91)开始，为了更好的开发，Luax将从LuaDardo的分支网络中分离出来。
-> 但你仍然可以将Luax作为LuaDardo的一个分支来使用。
+Luax是一个纯Dart的Lua 5.3虚拟机，最初源自[LuaDardo Plus](https://github.com/ImL1s/LuaDardo)（该版本是[LuaDardo](https://github.com/arcticfox1919/LuaDardo)的一个分支），现在作为一个独立项目进行维护。但你仍然可以将Luax作为LuaDardo的一个分支来使用。
 
 ## 特性
 
 - **100% Dart** — 无原生依赖，支持所有 Dart 平台（包括 Web）
+- **垃圾回收** — 增量式三色标记-清除回收器，带有`__gc`终结器、弱表（`__mode`）以及完整的`collectgarbage()` API
 - **goto/label** — 完整的 Lua 5.2+ 作用域规则，正确处理 upvalue 关闭
 - **Lua 5.3 模式匹配** — 从参考 C 实现移植，支持 `%b`（平衡匹配）和 `%f`（前沿模式）
 - **二进制数据** — `string.pack`、`string.unpack`、`string.packsize`、`string.dump`
@@ -288,6 +278,28 @@ import 'package:luax/debug.dart';
 state.printStack();  // 打印栈内容，包含类型和值
 ```
 
+## 垃圾回收
+
+Luax 内置了一个与 Lua 5.3 语义兼容的增量三色标记-清除垃圾收集器。该收集器与 Dart 自身的垃圾收集器协同工作——Dart 负责回收底层内存，而 Luax 收集器则负责追踪 Lua 层面的可达性、运行 `__gc` 终结器，并提供内存统计功能。
+
+```lua
+-- 为表添加一个终结器
+local t = setmetatable({}, {__gc = function()
+  print("finalized!")
+end})
+t = nil
+collectgarbage("collect")  -- → 毙掉了!
+
+-- 弱引用
+local cache = setmetatable({}, {__mode = "v"})
+cache[1] = {data = "ephemeral"}
+cache[1] = nil
+collectgarbage("collect")
+-- 即使表本身仍然活跃，缓存值现在也已可以被回收
+```
+
+**`collectgarbage` 选项:** `"collect"`, `"stop"`, `"restart"`, `"count"` (返回 KB), `"step"`, `"setpause"`, `"setstepmul"`, `"isrunning"`, `"info"` (返回包含阶段、垃圾量和总量的结构化表格).
+
 ## 性能
 
 相比上游 LuaDardo Plus v0.3.0 的显著性能提升：
@@ -297,6 +309,8 @@ state.printStack();  // 打印栈内容，包含类型和值
 | 解析器（端到端） | ~47% | 词法分析器 + 语句解析器调优 |
 | 语句解析器 | ~12% | record + 预分配列表 |
 | VM 栈 | ~22% | 固定容量数组实现 |
+| GC 三色 | 基于整数 | 减少每个对象的内存开销 |
+| GC 热路径 | 缓存 `__gc` / `__mode` | 消除重复的哈希查找 |
 | `sprintf` | 5 倍 | 针对 Lua 格式化的优化分支 |
 | `string.format` | 3.7 倍 | 简单格式符绕过 sprintf |
 | 操作码分发 | 减少开销 | 消除字符串类型的分发方式 |
@@ -370,4 +384,4 @@ Apache-2.0（与原始 LuaDardo 相同）
 | [arcticfox1919](https://github.com/arcticfox1919) | LuaDardo 原作者 |
 | [ImL1s](https://github.com/ImL1s) | LuaDardo Plus 分支 — bug 修复、Web 支持、异步、协程 |
 | [Telosnex / jpohhhh](https://github.com/Telosnex) | goto/label、性能优化、解析器重构、40+ bug 修复 |
-| [NaivG](https://github.com/NaivG) | 当前维护者 |
+| [NaivG](https://github.com/NaivG) | 本仓库维护者 |

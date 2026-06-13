@@ -5,11 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.3.1] - Unreleased
+## [0.3.1] - 2026-06-13
 
 ### Added
 
 - Incremental mark-and-sweep garbage collector (`LuaGarbageCollector`) compatible with Lua 5.3 semantics — tri-color marking, debt-based pacing, `__gc` finalizer support for tables and userdata, and full `collectgarbage()` API (`"collect"`, `"stop"`, `"restart"`, `"count"`, `"step"`, `"setpause"`, `"setstepmul"`, `"isrunning"`, `"info"`).
+- Weak table support: tables with a `__mode` metatable field are registered with the collector on `setmetatable` and unregistered on metatable removal, with sweep-time cleanup of weakly-referenced keys/values that have become unreachable.
+- `utf8` standard library — `utf8.char`, `utf8.codepoint`, `utf8.codes`, `utf8.len`, `utf8.offset`, and the `utf8.charpattern` pattern, working at the Unicode code-point level.
 - Async call path for Lua closures and async Dart functions, enabling non-blocking interop between the two runtimes.
 - Exposed the parser and AST via `lua_parser.dart`, allowing external tooling to parse and inspect Lua source.
 - `goto`/`label` statements with forward and backward jumps following Lua 5.2+ scoping rules.
@@ -21,13 +23,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - `LuaTable`, `Closure`, `Userdata`, and `LuaStateImpl` now mix in `GCObject` for tri-color mark-and-sweep tracking; the VM loop checks GC debt at regular intervals.
-- Renamed package from `lua_dardo_plus` to `luax`
+- Renamed package from `lua_dardo_plus` to `luax`.
 - Parser is approximately 47% faster end-to-end via lexer and statement-parser tuning.
 - `StatParser` is approximately 12% faster through the use of records and pre-sized lists.
 - `sprintf` fork delivers roughly 5x speedup; simple format specifiers bypass `sprintf` entirely for an additional 3.7x gain.
 - Fixed-capacity VM stack yields approximately 22% faster execution.
 - Opcode dispatch no longer relies on stringly-typed comparison, reducing overhead per instruction.
 - Updated minimum Dart SDK to 3+ for null-safety by default.
+- **GC perf:** tri-color stored as integers (instead of strings) to reduce per-object overhead; gray-queue propagation extracted into `_propagateGray()` to remove duplication between the cycle and finalization paths; `restart()` resumes collection without forcing a full cycle; `__gc` and `__mode` metamethod lookups are cached to avoid repeated hash lookups during finalization and weak-table registration.
+- **GC API:** `collectgarbage("info")` now reports a structured table reflecting the current collector state (running/paused, phase, debt, totals).
 
 ### Fixed
 
@@ -99,9 +103,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `debug.dart` `printStack` had a duplicate `luaNil` case instead of `luaBoolean` — corrected.
 
+#### Platform
+
+- Platform command execution now runs through a shell so PATH and other environment variables resolve correctly across platforms.
+
+### Build
+
+- Added a GitHub Actions `dart analyze` workflow that runs on push and pull request, restricted to Dart source changes only.
+
 ### Tests
 
 - GC unit tests and incremental state-machine tests (tri-color marking, cycle counting, `__gc` finalizers, debt-based pacing, `collectgarbage` API).
+- Weak-table GC tests covering `__mode = "k"`, `"v"`, and `"kv"` for both automatic and manual collection paths.
+- `utf8` library tests covering `char`, `codepoint`, `codes`, `len`, `offset`, and `charpattern` (including surrogate-pair handling and out-of-range inputs).
+- GC performance benchmark (`gc_perf_test.dart`) for measuring cycle throughput.
 - 56 gremlin torture tests for `goto`/`label` (forward jumps, backward jumps, upvalue closing, shadowing).
 - Glados property-based tests for math, table, operators, and coroutines.
 - Edge-case tests for `string.find`.

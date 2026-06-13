@@ -6,26 +6,16 @@
 
 A pure-Dart implementation of the Lua 5.3 virtual machine — actively maintained, performance-tuned, and feature-complete.
 
-[English](README.md) | [简体中文](README_zh.md)
+English | [简体中文](README_zh.md)
 
 ## About
 
-Luax is a maintained fork of [LuaDardo Plus](https://github.com/ImL1s/LuaDardo) (which was a [LuaDardo](https://github.com/arcticfox1919/LuaDardo) fork) , the original Lua 5.3 VM written in pure Dart.
-
-| Stage | Maintainer | Highlights |
-|-------|-----------|------------|
-| [LuaDardo](https://github.com/arcticfox1919/LuaDardo) | arcticfox1919 | Original Lua 5.3 VM implementation |
-| [LuaDardo Plus](https://github.com/ImL1s/LuaDardo) | ImL1s | Bug fixes (#13, #24, #33, #34, #36), web support, async functions, coroutines |
-| [Telosnex fork](https://github.com/Telosnex/LuaDardo) | Telosnex / jpohhhh | goto/label, 40+ bug fixes, major performance work, parser restructure, Lua 5.3 pattern matcher |
-| Luax (this repo) | NaivG | Ongoing maintenance and development, bug fixes (#7) |
-
-> [!important]
-> Starting from commit [a2576f](https://github.com/NaivG/Luax/commit/a25676f0ad6cfcf0234b4bbda053165ece882b91), Luax will be separated from LuaDardo's fork network for better development.
-> But you can still use Luax as a fork of LuaDardo.
+Luax is a pure-Dart Lua 5.3 virtual machine, originally derived from [LuaDardo Plus](https://github.com/ImL1s/LuaDardo) (which is a [LuaDardo](https://github.com/arcticfox1919/LuaDardo) fork), and now maintained as an independent project. But you can still use Luax as a fork of LuaDardo.
 
 ## Features
 
 - **100% Dart** — no native dependencies, runs on all Dart platforms including web
+- **Garbage collection** — incremental tri-color mark-and-sweep collector with `__gc` finalizers, weak tables (`__mode`), and the full `collectgarbage()` API
 - **goto/label** — full Lua 5.2+ scoping rules with proper upvalue closing
 - **Lua 5.3 pattern matching** — reference C implementation ported to Dart, including `%b` and `%f`
 - **Binary data** — `string.pack`, `string.unpack`, `string.packsize`, and `string.dump`
@@ -290,6 +280,28 @@ import 'package:luax/debug.dart';
 state.printStack();  // Prints stack contents with types and values
 ```
 
+## Garbage Collection
+
+Luax ships with an incremental tri-color mark-and-sweep garbage collector compatible with Lua 5.3 semantics. The collector cooperates with Dart's own GC — Dart reclaims the underlying memory while the Luax collector tracks Lua-level reachability, runs `__gc` finalizers, and provides memory accounting.
+
+```lua
+-- Attach a finalizer to a table
+local t = setmetatable({}, {__gc = function()
+  print("finalized!")
+end})
+t = nil
+collectgarbage("collect")  -- → finalized!
+
+-- Weak references
+local cache = setmetatable({}, {__mode = "v"})
+cache[1] = {data = "ephemeral"}
+cache[1] = nil
+collectgarbage("collect")
+-- The cached value is now eligible for collection even if the table itself is alive
+```
+
+**`collectgarbage` options:** `"collect"`, `"stop"`, `"restart"`, `"count"` (returns KB), `"step"`, `"setpause"`, `"setstepmul"`, `"isrunning"`, `"info"` (returns a structured table with phase, debt, and totals).
+
 ## Performance
 
 Significant performance improvements over the upstream LuaDardo Plus v0.3.0:
@@ -299,6 +311,8 @@ Significant performance improvements over the upstream LuaDardo Plus v0.3.0:
 | Parser (end-to-end) | ~47% faster | Lexer + statement parser tuning |
 | Statement parser | ~12% faster | Records + pre-sized lists |
 | VM stack | ~22% faster | Fixed-capacity array implementation |
+| GC tri-color | Integer-backed | Per-object memory overhead reduced |
+| GC hot paths | Cached `__gc` / `__mode` | Eliminates repeated hash lookups |
 | `sprintf` | 5x faster | Optimized fork for Lua formatting |
 | `string.format` | 3.7x faster | Bypasses `sprintf` for simple specifiers |
 | Opcode dispatch | Reduced overhead | Eliminated stringly-typed dispatch |
