@@ -111,10 +111,11 @@ void main() {
         expect(exitCode, equals(0));
       });
 
-      test('should return null for non-existent command', () {
+      test('should return non-zero for non-existent command', () {
         final exitCode = PlatformServices.instance
             .runProcess('non_existent_command_12345', []);
-        expect(exitCode, isNull);
+        expect(exitCode, isNotNull);
+        expect(exitCode, isNot(equals(0)));
       });
     });
 

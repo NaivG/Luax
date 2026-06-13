@@ -84,7 +84,7 @@ class NativePlatformServices extends PlatformServices {
   @override
   int? runProcess(String command, List<String> args) {
     try {
-      final result = io.Process.runSync(command, args);
+      final result = io.Process.runSync(command, args, runInShell: true);
       return result.exitCode;
     } catch (_) {
       return null;
