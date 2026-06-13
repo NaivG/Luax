@@ -4,7 +4,6 @@ import 'codegen/code_gen.dart';
 import 'parser/parser.dart';
 
 class Compiler {
-
   static Prototype compile(String chunk, String chunkName) {
     Block ast = Parser.parse(chunk, chunkName);
     Prototype proto = CodeGen.genProto(ast);
@@ -18,5 +17,4 @@ class Compiler {
       _setSource(subProto!, chunkName);
     }
   }
-
 }

@@ -304,8 +304,7 @@ void main() {
   });
 
   group('Weak table lifecycle', () {
-    test('unreachable weak table is collected and removed from tracking',
-        () {
+    test('unreachable weak table is collected and removed from tracking', () {
       final ls = LuaState.newState() as LuaStateImpl;
       ls.openLibs();
 

@@ -34,7 +34,7 @@ const int luaGcInc = 0;
 
 /// Generational mode (accepted but treated as incremental).
 /// I guess... whatever. Would anyone use this?
-/// 
+///
 /// TODO: Implement generational mode. And maybe a few other things.
 const int luaGcGen = 1;
 
@@ -206,9 +206,7 @@ class LuaGarbageCollector {
   bool step([int amount = 0]) {
     if (!_running) return false;
 
-    final work = amount > 0
-        ? amount * 1024.0
-        : _gcDebt * _stepMul / 100;
+    final work = amount > 0 ? amount * 1024.0 : _gcDebt * _stepMul / 100;
 
     _gcDebt = 0;
 

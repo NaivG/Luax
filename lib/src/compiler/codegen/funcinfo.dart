@@ -29,7 +29,7 @@ class UpvalInfo {
   int upvalIndex;
   int index;
 
-  UpvalInfo(this.index,this.upvalIndex,this.locVarSlot);
+  UpvalInfo(this.index, this.upvalIndex, this.locVarSlot);
 }
 
 class LocVarInfo {
@@ -41,7 +41,8 @@ class LocVarInfo {
   int endPC;
   bool captured = false;
 
-  LocVarInfo(this.prev,this.name,this.slot,this.scopeLv,this.startPC,this.endPC);
+  LocVarInfo(
+      this.prev, this.name, this.slot, this.scopeLv, this.startPC, this.endPC);
 }
 
 class FuncInfo {
@@ -159,13 +160,13 @@ class FuncInfo {
       int a = getJmpArgA();
       for (int _pc in pendingBreakJmps) {
         int sBx = pc() - _pc;
-        int i = LuaMath.toInt32((sBx + Instruction.maxArg_sbx) << 14) | 
-        LuaMath.toInt32(a << 6) | 
-        OpCodeKind.JMP.index;
+        int i = LuaMath.toInt32((sBx + Instruction.maxArg_sbx) << 14) |
+            LuaMath.toInt32(a << 6) |
+            OpCodeKind.JMP.index;
         insts[_pc] = i;
       }
     }
-    
+
     scopeLv--;
     // Remove labels going out of scope; restore shadowed outer labels
     Map<String, LabelInfo?> labelUpdates = {};
@@ -183,7 +184,7 @@ class FuncInfo {
     });
     Map<String?, LocVarInfo?> tmp = Map.from(locNames);
     for (LocVarInfo? locVar in tmp.values) {
-      if (locVar!.scopeLv> scopeLv) {
+      if (locVar!.scopeLv > scopeLv) {
         // out of scope
         locVar.endPC = endPC;
         removeLocVar(locVar);
@@ -211,7 +212,8 @@ class FuncInfo {
   }
 
   int addLocVar(String name, int startPC) {
-    LocVarInfo newVar = LocVarInfo(locNames[name],name,allocReg(),scopeLv,startPC,0);
+    LocVarInfo newVar =
+        LocVarInfo(locNames[name], name, allocReg(), scopeLv, startPC, 0);
     // newVar.name = name;
     // newVar.prev = locNames[name];
     // newVar.scopeLv = scopeLv;
@@ -251,7 +253,7 @@ class FuncInfo {
       if (parent!.locNames.containsKey(name)) {
         LocVarInfo locVar = parent!.locNames[name]!;
         int idx = upvalues.length;
-        UpvalInfo upval = UpvalInfo(idx,-1,locVar.slot);
+        UpvalInfo upval = UpvalInfo(idx, -1, locVar.slot);
         // upval.locVarSlot = locVar.slot;
         // upval.upvalIndex = -1;
         // upval.index = idx;
@@ -262,7 +264,7 @@ class FuncInfo {
       int uvIdx = parent!.indexOfUpval(name);
       if (uvIdx >= 0) {
         int idx = upvalues.length;
-        UpvalInfo upval = UpvalInfo(idx,uvIdx,-1);
+        UpvalInfo upval = UpvalInfo(idx, uvIdx, -1);
         // upval.locVarSlot = -1;
         // upval.upvalIndex = uvIdx;
         // upval.index = idx;
@@ -291,7 +293,7 @@ class FuncInfo {
           if (v.captured) {
             hasCapturedLocVars = true;
           }
-          if (v.slot< minSlotOfLocVars! && v.name[0] != '(') {
+          if (v.slot < minSlotOfLocVars! && v.name[0] != '(') {
             minSlotOfLocVars = v.slot;
           }
         }
@@ -351,7 +353,8 @@ class FuncInfo {
 
   void emitAsBx(int line, OpCodeKind opcode, int a, int sBx) {
     int i = LuaMath.toInt32((sBx + Instruction.maxArg_sbx) << 14) |
-    a << 6 | opcode.index;
+        a << 6 |
+        opcode.index;
     insts.add(i);
     lineNums.add(line);
   }

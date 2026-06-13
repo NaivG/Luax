@@ -6,8 +6,7 @@ import 'lua_table.dart';
 /// Previously, all Userdata objects shared the same metatable via registry key,
 /// which caused setting metatable on one userdata to affect all userdata.
 class Userdata<T> with GCObject {
-
-  final List<T?> _data = List.filled(1,null);
+  final List<T?> _data = List.filled(1, null);
 
   /// Per-instance metatable, similar to LuaTable
   LuaTable? metatable;
@@ -18,7 +17,7 @@ class Userdata<T> with GCObject {
 
   T? get data => _data.first;
 
-  set data(T? data)=> _data.first = data;
+  set data(T? data) => _data.first = data;
 
   // ── GCObject implementation ──────────────────────────────────────
 

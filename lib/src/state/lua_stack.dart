@@ -262,7 +262,9 @@ class LuaStack {
   /// Returns the line number corresponding to the current instruction (pc),
   /// or null if line info is not available.
   int? getCurrentLine() {
-    if (closure?.proto != null && pc > 0 && pc <= closure!.proto!.lineInfo.length) {
+    if (closure?.proto != null &&
+        pc > 0 &&
+        pc <= closure!.proto!.lineInfo.length) {
       return closure!.proto!.lineInfo[pc - 1];
     }
     return null;

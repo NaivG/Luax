@@ -749,8 +749,7 @@ class LuaStateImpl with GCObject implements LuaState, LuaVM {
   /// Async version of [_callLuaClosure].
   /// Used by [callAsync] so that the entire call chain supports awaiting
   /// async Dart functions invoked from within Lua code.
-  Future<void> _callLuaClosureAsync(
-      int nArgs, int nResults, Closure c) async {
+  Future<void> _callLuaClosureAsync(int nArgs, int nResults, Closure c) async {
     int nRegs = c.proto!.maxStackSize;
     int nParams = c.proto!.numParams!;
     bool isVararg = c.proto!.isVararg == 1;
@@ -839,160 +838,160 @@ class LuaStateImpl with GCObject implements LuaState, LuaVM {
   void _runLuaClosure() {
     // Set GC scope so objects created during VM execution are tracked.
     _withGcScope(() {
-    int gcCounter = 0;
-    // Optimised dispatch loop that replaces the original triple overhead
-    // (array lookup → indirect Function.call → string comparison) with a
-    // single `switch` on the raw 6-bit opcode. ~10% perf win.
-    for (;;) {
-      final int inst = fetch();
-      switch (inst & 0x3F) {
-        case 0:
-          Instructions.move(inst, this);
-          break;
-        case 1:
-          Instructions.loadK(inst, this);
-          break;
-        case 2:
-          Instructions.loadKx(inst, this);
-          break;
-        case 3:
-          Instructions.loadBool(inst, this);
-          break;
-        case 4:
-          Instructions.loadNil(inst, this);
-          break;
-        case 5:
-          Instructions.getUpval(inst, this);
-          break;
-        case 6:
-          Instructions.getTabUp(inst, this);
-          break;
-        case 7:
-          Instructions.getTable(inst, this);
-          break;
-        case 8:
-          Instructions.setTabUp(inst, this);
-          break;
-        case 9:
-          Instructions.setUpval(inst, this);
-          break;
-        case 10:
-          Instructions.setTable(inst, this);
-          break;
-        case 11:
-          Instructions.newTable(inst, this);
-          break;
-        case 12:
-          Instructions.self(inst, this);
-          break;
-        case 13:
-          Instructions.add(inst, this);
-          break;
-        case 14:
-          Instructions.sub(inst, this);
-          break;
-        case 15:
-          Instructions.mul(inst, this);
-          break;
-        case 16:
-          Instructions.mod(inst, this);
-          break;
-        case 17:
-          Instructions.pow(inst, this);
-          break;
-        case 18:
-          Instructions.div(inst, this);
-          break;
-        case 19:
-          Instructions.idiv(inst, this);
-          break;
-        case 20:
-          Instructions.band(inst, this);
-          break;
-        case 21:
-          Instructions.bor(inst, this);
-          break;
-        case 22:
-          Instructions.bxor(inst, this);
-          break;
-        case 23:
-          Instructions.shl(inst, this);
-          break;
-        case 24:
-          Instructions.shr(inst, this);
-          break;
-        case 25:
-          Instructions.unm(inst, this);
-          break;
-        case 26:
-          Instructions.bnot(inst, this);
-          break;
-        case 27:
-          Instructions.not(inst, this);
-          break;
-        case 28:
-          Instructions.length(inst, this);
-          break;
-        case 29:
-          Instructions.concat(inst, this);
-          break;
-        case 30:
-          Instructions.jmp(inst, this);
-          break;
-        case 31:
-          Instructions.eq(inst, this);
-          break;
-        case 32:
-          Instructions.lt(inst, this);
-          break;
-        case 33:
-          Instructions.le(inst, this);
-          break;
-        case 34:
-          Instructions.test(inst, this);
-          break;
-        case 35:
-          Instructions.testSet(inst, this);
-          break;
-        case 36:
-          Instructions.call(inst, this);
-          break;
-        case 37:
-          Instructions.tailCall(inst, this);
-          break;
-        case 38:
-          Instructions.return_(inst, this);
-          return;
-        case 39:
-          Instructions.forLoop(inst, this);
-          break;
-        case 40:
-          Instructions.forPrep(inst, this);
-          break;
-        case 41:
-          Instructions.tForCall(inst, this);
-          break;
-        case 42:
-          Instructions.tForLoop(inst, this);
-          break;
-        case 43:
-          Instructions.setList(inst, this);
-          break;
-        case 44:
-          Instructions.closure(inst, this);
-          break;
-        case 45:
-          Instructions.vararg(inst, this);
-          break;
-        case 46:
-          break; // EXTRAARG — consumed by preceding instruction
+      int gcCounter = 0;
+      // Optimised dispatch loop that replaces the original triple overhead
+      // (array lookup → indirect Function.call → string comparison) with a
+      // single `switch` on the raw 6-bit opcode. ~10% perf win.
+      for (;;) {
+        final int inst = fetch();
+        switch (inst & 0x3F) {
+          case 0:
+            Instructions.move(inst, this);
+            break;
+          case 1:
+            Instructions.loadK(inst, this);
+            break;
+          case 2:
+            Instructions.loadKx(inst, this);
+            break;
+          case 3:
+            Instructions.loadBool(inst, this);
+            break;
+          case 4:
+            Instructions.loadNil(inst, this);
+            break;
+          case 5:
+            Instructions.getUpval(inst, this);
+            break;
+          case 6:
+            Instructions.getTabUp(inst, this);
+            break;
+          case 7:
+            Instructions.getTable(inst, this);
+            break;
+          case 8:
+            Instructions.setTabUp(inst, this);
+            break;
+          case 9:
+            Instructions.setUpval(inst, this);
+            break;
+          case 10:
+            Instructions.setTable(inst, this);
+            break;
+          case 11:
+            Instructions.newTable(inst, this);
+            break;
+          case 12:
+            Instructions.self(inst, this);
+            break;
+          case 13:
+            Instructions.add(inst, this);
+            break;
+          case 14:
+            Instructions.sub(inst, this);
+            break;
+          case 15:
+            Instructions.mul(inst, this);
+            break;
+          case 16:
+            Instructions.mod(inst, this);
+            break;
+          case 17:
+            Instructions.pow(inst, this);
+            break;
+          case 18:
+            Instructions.div(inst, this);
+            break;
+          case 19:
+            Instructions.idiv(inst, this);
+            break;
+          case 20:
+            Instructions.band(inst, this);
+            break;
+          case 21:
+            Instructions.bor(inst, this);
+            break;
+          case 22:
+            Instructions.bxor(inst, this);
+            break;
+          case 23:
+            Instructions.shl(inst, this);
+            break;
+          case 24:
+            Instructions.shr(inst, this);
+            break;
+          case 25:
+            Instructions.unm(inst, this);
+            break;
+          case 26:
+            Instructions.bnot(inst, this);
+            break;
+          case 27:
+            Instructions.not(inst, this);
+            break;
+          case 28:
+            Instructions.length(inst, this);
+            break;
+          case 29:
+            Instructions.concat(inst, this);
+            break;
+          case 30:
+            Instructions.jmp(inst, this);
+            break;
+          case 31:
+            Instructions.eq(inst, this);
+            break;
+          case 32:
+            Instructions.lt(inst, this);
+            break;
+          case 33:
+            Instructions.le(inst, this);
+            break;
+          case 34:
+            Instructions.test(inst, this);
+            break;
+          case 35:
+            Instructions.testSet(inst, this);
+            break;
+          case 36:
+            Instructions.call(inst, this);
+            break;
+          case 37:
+            Instructions.tailCall(inst, this);
+            break;
+          case 38:
+            Instructions.return_(inst, this);
+            return;
+          case 39:
+            Instructions.forLoop(inst, this);
+            break;
+          case 40:
+            Instructions.forPrep(inst, this);
+            break;
+          case 41:
+            Instructions.tForCall(inst, this);
+            break;
+          case 42:
+            Instructions.tForLoop(inst, this);
+            break;
+          case 43:
+            Instructions.setList(inst, this);
+            break;
+          case 44:
+            Instructions.closure(inst, this);
+            break;
+          case 45:
+            Instructions.vararg(inst, this);
+            break;
+          case 46:
+            break; // EXTRAARG — consumed by preceding instruction
+        }
+        // Periodically check GC debt.
+        if (++gcCounter >= GcConstants.instructionInterval) {
+          gcCounter = 0;
+          _gc.checkDebt();
+        }
       }
-      // Periodically check GC debt.
-      if (++gcCounter >= GcConstants.instructionInterval) {
-        gcCounter = 0;
-        _gc.checkDebt();
-      }
-    }
     });
   }
 
@@ -1004,83 +1003,168 @@ class LuaStateImpl with GCObject implements LuaState, LuaVM {
   /// the synchronous [call] path (which would crash on `dartFunc!`).
   Future<void> _runLuaClosureAsync() async {
     await _withGcScopeAsync(() async {
-    int gcCounter = 0;
-    for (;;) {
-      final int inst = fetch();
-      switch (inst & 0x3F) {
-        // ── sync-only opcodes (unchanged) ──────────────────────────────
-        case 0:  Instructions.move(inst, this);     break;
-        case 1:  Instructions.loadK(inst, this);    break;
-        case 2:  Instructions.loadKx(inst, this);   break;
-        case 3:  Instructions.loadBool(inst, this); break;
-        case 4:  Instructions.loadNil(inst, this);  break;
-        case 5:  Instructions.getUpval(inst, this); break;
-        case 6:  Instructions.getTabUp(inst, this); break;
-        case 7:  Instructions.getTable(inst, this); break;
-        case 8:  Instructions.setTabUp(inst, this); break;
-        case 9:  Instructions.setUpval(inst, this); break;
-        case 10: Instructions.setTable(inst, this); break;
-        case 11: Instructions.newTable(inst, this); break;
-        case 12: Instructions.self(inst, this);     break;
-        case 13: Instructions.add(inst, this);      break;
-        case 14: Instructions.sub(inst, this);      break;
-        case 15: Instructions.mul(inst, this);      break;
-        case 16: Instructions.mod(inst, this);      break;
-        case 17: Instructions.pow(inst, this);      break;
-        case 18: Instructions.div(inst, this);      break;
-        case 19: Instructions.idiv(inst, this);     break;
-        case 20: Instructions.band(inst, this);     break;
-        case 21: Instructions.bor(inst, this);      break;
-        case 22: Instructions.bxor(inst, this);     break;
-        case 23: Instructions.shl(inst, this);      break;
-        case 24: Instructions.shr(inst, this);      break;
-        case 25: Instructions.unm(inst, this);      break;
-        case 26: Instructions.bnot(inst, this);     break;
-        case 27: Instructions.not(inst, this);      break;
-        case 28: Instructions.length(inst, this);   break;
-        case 29: Instructions.concat(inst, this);   break;
-        case 30: Instructions.jmp(inst, this);      break;
-        case 31: Instructions.eq(inst, this);       break;
-        case 32: Instructions.lt(inst, this);       break;
-        case 33: Instructions.le(inst, this);       break;
-        case 34: Instructions.test(inst, this);     break;
-        case 35: Instructions.testSet(inst, this);  break;
+      int gcCounter = 0;
+      for (;;) {
+        final int inst = fetch();
+        switch (inst & 0x3F) {
+          // ── sync-only opcodes (unchanged) ──────────────────────────────
+          case 0:
+            Instructions.move(inst, this);
+            break;
+          case 1:
+            Instructions.loadK(inst, this);
+            break;
+          case 2:
+            Instructions.loadKx(inst, this);
+            break;
+          case 3:
+            Instructions.loadBool(inst, this);
+            break;
+          case 4:
+            Instructions.loadNil(inst, this);
+            break;
+          case 5:
+            Instructions.getUpval(inst, this);
+            break;
+          case 6:
+            Instructions.getTabUp(inst, this);
+            break;
+          case 7:
+            Instructions.getTable(inst, this);
+            break;
+          case 8:
+            Instructions.setTabUp(inst, this);
+            break;
+          case 9:
+            Instructions.setUpval(inst, this);
+            break;
+          case 10:
+            Instructions.setTable(inst, this);
+            break;
+          case 11:
+            Instructions.newTable(inst, this);
+            break;
+          case 12:
+            Instructions.self(inst, this);
+            break;
+          case 13:
+            Instructions.add(inst, this);
+            break;
+          case 14:
+            Instructions.sub(inst, this);
+            break;
+          case 15:
+            Instructions.mul(inst, this);
+            break;
+          case 16:
+            Instructions.mod(inst, this);
+            break;
+          case 17:
+            Instructions.pow(inst, this);
+            break;
+          case 18:
+            Instructions.div(inst, this);
+            break;
+          case 19:
+            Instructions.idiv(inst, this);
+            break;
+          case 20:
+            Instructions.band(inst, this);
+            break;
+          case 21:
+            Instructions.bor(inst, this);
+            break;
+          case 22:
+            Instructions.bxor(inst, this);
+            break;
+          case 23:
+            Instructions.shl(inst, this);
+            break;
+          case 24:
+            Instructions.shr(inst, this);
+            break;
+          case 25:
+            Instructions.unm(inst, this);
+            break;
+          case 26:
+            Instructions.bnot(inst, this);
+            break;
+          case 27:
+            Instructions.not(inst, this);
+            break;
+          case 28:
+            Instructions.length(inst, this);
+            break;
+          case 29:
+            Instructions.concat(inst, this);
+            break;
+          case 30:
+            Instructions.jmp(inst, this);
+            break;
+          case 31:
+            Instructions.eq(inst, this);
+            break;
+          case 32:
+            Instructions.lt(inst, this);
+            break;
+          case 33:
+            Instructions.le(inst, this);
+            break;
+          case 34:
+            Instructions.test(inst, this);
+            break;
+          case 35:
+            Instructions.testSet(inst, this);
+            break;
 
-        // ── CALL: R(A),...,R(A+C-2) := R(A)(R(A+1),...,R(A+B-1)) ──────
-        case 36:
-          await _execCallAsync(inst);
-          break;
+          // ── CALL: R(A),...,R(A+C-2) := R(A)(R(A+1),...,R(A+B-1)) ──────
+          case 36:
+            await _execCallAsync(inst);
+            break;
 
-        // ── TAILCALL: return R(A)(R(A+1),...,R(A+B-1)) ────────────────
-        case 37:
-          await _execTailCallAsync(inst);
-          break;
+          // ── TAILCALL: return R(A)(R(A+1),...,R(A+B-1)) ────────────────
+          case 37:
+            await _execTailCallAsync(inst);
+            break;
 
-        // ── RETURN ─────────────────────────────────────────────────────
-        case 38:
-          Instructions.return_(inst, this);
-          return;
+          // ── RETURN ─────────────────────────────────────────────────────
+          case 38:
+            Instructions.return_(inst, this);
+            return;
 
-        case 39: Instructions.forLoop(inst, this);  break;
-        case 40: Instructions.forPrep(inst, this);  break;
+          case 39:
+            Instructions.forLoop(inst, this);
+            break;
+          case 40:
+            Instructions.forPrep(inst, this);
+            break;
 
-        // ── TFORCALL: R(A+3),...,R(A+2+C) := R(A)(R(A+1),R(A+2)) ─────
-        case 41:
-          await _execTForCallAsync(inst);
-          break;
+          // ── TFORCALL: R(A+3),...,R(A+2+C) := R(A)(R(A+1),R(A+2)) ─────
+          case 41:
+            await _execTForCallAsync(inst);
+            break;
 
-        case 42: Instructions.tForLoop(inst, this); break;
-        case 43: Instructions.setList(inst, this);  break;
-        case 44: Instructions.closure(inst, this);  break;
-        case 45: Instructions.vararg(inst, this);   break;
-        case 46: break; // EXTRAARG
+          case 42:
+            Instructions.tForLoop(inst, this);
+            break;
+          case 43:
+            Instructions.setList(inst, this);
+            break;
+          case 44:
+            Instructions.closure(inst, this);
+            break;
+          case 45:
+            Instructions.vararg(inst, this);
+            break;
+          case 46:
+            break; // EXTRAARG
+        }
+        // Periodically check GC debt.
+        if (++gcCounter >= GcConstants.instructionInterval) {
+          gcCounter = 0;
+          _gc.checkDebt();
+        }
       }
-      // Periodically check GC debt.
-      if (++gcCounter >= GcConstants.instructionInterval) {
-        gcCounter = 0;
-        _gc.checkDebt();
-      }
-    }
     });
   }
 
@@ -2156,9 +2240,8 @@ class LuaStateImpl with GCObject implements LuaState, LuaVM {
         final rawSource = stack.closure!.proto?.source;
         // Apply luaO_chunkid-style truncation so frame labels don't embed
         // the entire script source (e.g. for chunks loaded via loadString).
-        final funcName = rawSource == null
-            ? '<dart function>'
-            : LuaStack.chunkid(rawSource);
+        final funcName =
+            rawSource == null ? '<dart function>' : LuaStack.chunkid(rawSource);
         int line = stack.pc > 0 && stack.closure!.proto != null
             ? (stack.closure!.proto!.lineInfo.isNotEmpty
                 ? stack.closure!.proto!.lineInfo[stack.pc - 1]

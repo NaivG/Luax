@@ -80,8 +80,7 @@ class Closure with GCObject {
     }
   }
 
-  static void _tracePrototype(
-      Prototype p, void Function(GCObject obj) visit) {
+  static void _tracePrototype(Prototype p, void Function(GCObject obj) visit) {
     for (final c in p.constants) {
       if (c is GCObject) visit(c);
     }

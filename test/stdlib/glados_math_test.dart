@@ -50,7 +50,9 @@ void main() {
     Glados(any.intInRange(-10000, 10000)).test(
       'floor(n + 0.5) == n or n+1',
       (n) {
-        final r = _run('local f = math.floor($n + 0.5); return f >= $n and f <= $n + 1', 1);
+        final r = _run(
+            'local f = math.floor($n + 0.5); return f >= $n and f <= $n + 1',
+            1);
         expect(r?[0], equals('true'));
       },
     );
@@ -78,7 +80,8 @@ void main() {
     Glados2(any.intInRange(-1000, 1000), any.intInRange(-1000, 1000)).test(
       'max(a,b) >= a and max(a,b) >= b',
       (a, b) {
-        final r = _run('local m = math.max($a,$b); return m >= $a and m >= $b', 1);
+        final r =
+            _run('local m = math.max($a,$b); return m >= $a and m >= $b', 1);
         expect(r?[0], equals('true'));
       },
     );
@@ -86,7 +89,8 @@ void main() {
     Glados2(any.intInRange(-1000, 1000), any.intInRange(-1000, 1000)).test(
       'min(a,b) <= a and min(a,b) <= b',
       (a, b) {
-        final r = _run('local m = math.min($a,$b); return m <= $a and m <= $b', 1);
+        final r =
+            _run('local m = math.min($a,$b); return m <= $a and m <= $b', 1);
         expect(r?[0], equals('true'));
       },
     );
@@ -94,7 +98,8 @@ void main() {
     Glados2(any.intInRange(-1000, 1000), any.intInRange(-1000, 1000)).test(
       'max(a,b) == a or max(a,b) == b',
       (a, b) {
-        final r = _run('local m = math.max($a,$b); return m == $a or m == $b', 1);
+        final r =
+            _run('local m = math.max($a,$b); return m == $a or m == $b', 1);
         expect(r?[0], equals('true'));
       },
     );
@@ -124,7 +129,8 @@ void main() {
       (n) {
         final x = n / 100.0;
         final r = _run(
-            'local s,c = math.sin($x),math.cos($x); return math.abs(s*s+c*c - 1) < 1e-10', 1);
+            'local s,c = math.sin($x),math.cos($x); return math.abs(s*s+c*c - 1) < 1e-10',
+            1);
         expect(r?[0], equals('true'));
       },
     );
@@ -135,8 +141,8 @@ void main() {
       'exp(log(x)) ≈ x for x > 0',
       (n) {
         final x = n / 10.0;
-        final r = _run(
-            'return math.abs(math.exp(math.log($x)) - $x) < 1e-8', 1);
+        final r =
+            _run('return math.abs(math.exp(math.log($x)) - $x) < 1e-8', 1);
         expect(r?[0], equals('true'));
       },
     );
@@ -145,8 +151,8 @@ void main() {
       'log(exp(x)) ≈ x',
       (n) {
         final x = n / 10.0;
-        final r = _run(
-            'return math.abs(math.log(math.exp($x)) - $x) < 1e-8', 1);
+        final r =
+            _run('return math.abs(math.log(math.exp($x)) - $x) < 1e-8', 1);
         expect(r?[0], equals('true'));
       },
     );

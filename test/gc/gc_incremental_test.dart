@@ -52,12 +52,18 @@ void main() {
 
       // Check that the expected fields exist.
       for (final key in [
-        'count', 'pause', 'stepmul', 'steps', 'collections',
-        'objects', 'isrunning', 'mode', 'phase',
+        'count',
+        'pause',
+        'stepmul',
+        'steps',
+        'collections',
+        'objects',
+        'isrunning',
+        'mode',
+        'phase',
       ]) {
         ls.getField(-1, key);
-        expect(ls.isNoneOrNil(-1), isFalse,
-            reason: 'missing key: $key');
+        expect(ls.isNoneOrNil(-1), isFalse, reason: 'missing key: $key');
         ls.pop(1);
       }
     });

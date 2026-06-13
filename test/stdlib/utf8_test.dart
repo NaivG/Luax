@@ -167,8 +167,8 @@ void main() {
     test('supplementary plane character round-trip', () {
       final ls = LuaState.newState();
       ls.openLibs();
-      expect(evalInt(ls, 'utf8.codepoint(utf8.char(0x10348))'),
-          equals(0x10348));
+      expect(
+          evalInt(ls, 'utf8.codepoint(utf8.char(0x10348))'), equals(0x10348));
     });
 
     test('multi-byte string positions: each char starts at its position', () {

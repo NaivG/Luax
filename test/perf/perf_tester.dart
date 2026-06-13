@@ -179,8 +179,7 @@ class PerfTester<Input, Output> {
     Future<T?> Function<T>(
       Future<T> Function() callback, {
       Duration additionalTime,
-    })?
-    runAsync,
+    })? runAsync,
   }) async {
     final totalSteps = 2 + (skipEqualityCheck ? 0 : 1) + (profile ? 1 : 0);
     var step = 0;
@@ -437,7 +436,7 @@ class PerfTester<Input, Output> {
     // Find maximum width needed for labels
     var maxLabelWidth =
         allValues.keys.map((label) => '$label (ms):'.length).reduce(math.max) +
-        2;
+            2;
 
     // Find maximum width needed for each column's values
     var maxWidth1 = math.max(
@@ -449,8 +448,8 @@ class PerfTester<Input, Output> {
                   vals[1] >= 1000
                       ? 0
                       : vals[1] >= 100
-                      ? 1
-                      : 3,
+                          ? 1
+                          : 3,
                 )
                 .length,
           )
@@ -466,8 +465,8 @@ class PerfTester<Input, Output> {
                   vals[0] >= 1000
                       ? 0
                       : vals[0] >= 100
-                      ? 1
-                      : 3,
+                          ? 1
+                          : 3,
                 )
                 .length,
           )
@@ -512,12 +511,10 @@ class PerfTester<Input, Output> {
       bool formatLarge = false,
       bool higherIsBetter = false,
     }) {
-      var formattedVal1 = formatLarge
-          ? formatNumber(val1)
-          : val1.toStringAsFixed(3);
-      var formattedVal2 = formatLarge
-          ? formatNumber(val2)
-          : val2.toStringAsFixed(3);
+      var formattedVal1 =
+          formatLarge ? formatNumber(val1) : val1.toStringAsFixed(3);
+      var formattedVal2 =
+          formatLarge ? formatNumber(val2) : val2.toStringAsFixed(3);
 
       // Calculate improvement and speedup
       var improvement = ((val2 - val1) / val2 * 100);
@@ -650,9 +647,8 @@ class PerfTester<Input, Output> {
 
       // Use square root scaling for better visibility
       for (var count in hist) {
-        var heightRatio = count == 0
-            ? 0
-            : math.sqrt(count) / math.sqrt(maxCount);
+        var heightRatio =
+            count == 0 ? 0 : math.sqrt(count) / math.sqrt(maxCount);
         var height = (heightRatio * 8).round();
         var char = switch (height) {
           0 => ' ',

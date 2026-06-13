@@ -431,8 +431,7 @@ void main() {
         expect(lua.toStr(-1), equals('Hello, World!'));
       });
 
-      test('sync call() throws descriptive error for async closures',
-          () async {
+      test('sync call() throws descriptive error for async closures', () async {
         lua.registerAsync('asyncOnly', (LuaState ls) async {
           ls.pushInteger(1);
           return 1;

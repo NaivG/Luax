@@ -214,7 +214,7 @@ class Utf8Lib {
     if (decoded == null || n + decoded.$2 > len) {
       return ls.error2("invalid UTF-8 code");
     }
-    ls.pushInteger(n + 1);      // 1-based position
+    ls.pushInteger(n + 1); // 1-based position
     ls.pushInteger(decoded.$1); // code point
     return 2;
   }
@@ -232,10 +232,9 @@ class Utf8Lib {
     int posi = _posRelat(ls.optInteger(2, 1)!, len);
     int posj = _posRelat(ls.optInteger(3, -1)!, len);
 
-    ls.argCheck(1 <= posi && posi - 1 <= len, 2,
-        "initial position out of string");
-    ls.argCheck(posj - 1 < len, 3,
-        "final position out of string");
+    ls.argCheck(
+        1 <= posi && posi - 1 <= len, 2, "initial position out of string");
+    ls.argCheck(posj - 1 < len, 3, "final position out of string");
 
     int idx = posi - 1;
     int end = posj - 1;
@@ -272,8 +271,7 @@ class Utf8Lib {
     int defaultPosi = (n >= 0) ? 1 : len + 1;
     int posi = _posRelat(ls.optInteger(3, defaultPosi)!, len);
 
-    ls.argCheck(1 <= posi && posi - 1 <= len, 3,
-        "position out of range");
+    ls.argCheck(1 <= posi && posi - 1 <= len, 3, "position out of range");
 
     int idx = posi - 1;
 

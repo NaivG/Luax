@@ -1,8 +1,8 @@
 import 'lua.dart';
 
-_print(int i,LuaType type,[String? value]){
+_print(int i, LuaType type, [String? value]) {
   var msg = "index:$i -> $type";
-  if(value != null) msg += " value:$value";
+  if (value != null) msg += " value:$value";
   print(msg);
 }
 
@@ -14,15 +14,15 @@ extension LuaStateDebug on LuaState {
       LuaType t = this.type(i);
       switch (this.type(i)) {
         case LuaType.luaNone:
-          _print(i,t);
+          _print(i, t);
           break;
 
         case LuaType.luaNil:
-          _print(i,t);
+          _print(i, t);
           break;
 
         case LuaType.luaBoolean:
-          _print(i,t,"${this.toBoolean(i) ? "true" : "false"}");
+          _print(i, t, "${this.toBoolean(i) ? "true" : "false"}");
           break;
 
         case LuaType.luaLightUserdata:
@@ -31,33 +31,33 @@ extension LuaStateDebug on LuaState {
 
         case LuaType.luaNumber:
           if (this.isInteger(i)) {
-            _print(i,t,"(integer)${this.toInteger(i)}");
+            _print(i, t, "(integer)${this.toInteger(i)}");
           } else if (this.isNumber(i)) {
-            _print(i,t,"${this.toNumber(i)}");
+            _print(i, t, "${this.toNumber(i)}");
           }
           break;
 
         case LuaType.luaString:
-          _print(i,t,"${this.toStr(i)}");
+          _print(i, t, "${this.toStr(i)}");
           break;
 
         case LuaType.luaTable:
-          _print(i,t);
+          _print(i, t);
           break;
 
         case LuaType.luaFunction:
-          _print(i,t);
+          _print(i, t);
           break;
 
         case LuaType.luaUserdata:
-          _print(i,t);
+          _print(i, t);
           break;
 
         case LuaType.luaThread:
-          _print(i,t);
+          _print(i, t);
           break;
         default:
-          _print(i,t,"${this.typeName(t)}");
+          _print(i, t, "${this.typeName(t)}");
           break;
       }
     }
