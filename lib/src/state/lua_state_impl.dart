@@ -163,6 +163,27 @@ class LuaStateImpl with GCObject implements LuaState, LuaVM {
   void _setMetatable(Object? val, LuaTable? mt) {
     if (val is LuaTable) {
       val.metatable = mt;
+
+      // Detect __mode for weak table support.
+      // Lua 5.3 captures the weak mode at setmetatable time; subsequent
+      // changes to the metatable's __mode field do not affect the table.
+      if (mt != null) {
+        final mode = mt.get('__mode');
+        if (mode is String) {
+          _gc.registerWeakTable(val, mode);
+        } else {
+          // New metatable has no __mode: clear any previous weak status.
+          if (val.weakMode != null) {
+            _gc.unregisterWeakTable(val);
+          }
+        }
+      } else {
+        // Metatable removed: clear weak status.
+        if (val.weakMode != null) {
+          _gc.unregisterWeakTable(val);
+        }
+      }
+
       return;
     }
     // Fix #36: Support per-instance metatable for Userdata

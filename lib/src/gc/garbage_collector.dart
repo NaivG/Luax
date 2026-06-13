@@ -69,6 +69,13 @@ class LuaGarbageCollector {
   /// Objects awaiting `__gc` finalization.
   final List<GCObject> _tobefnz = [];
 
+  /// Tables with weak references (`__mode`).
+  ///
+  /// Registered when [setmetatable] is called with a metatable that has
+  /// a `__mode` field. Cleaned during the sweep phase to remove entries
+  /// whose weakly-referenced keys/values have become unreachable.
+  final List<LuaTable> _weakTables = [];
+
   // ── Incremental mark state ─────────────────────────────────────────
 
   /// Gray queue for the incremental mark phase.
@@ -125,6 +132,27 @@ class LuaGarbageCollector {
       _totalBytes += size;
       _gcDebt += size;
     }
+  }
+
+  /// Register a table as having weak references.
+  ///
+  /// Called from [LuaStateImpl._setMetatable] when the metatable contains
+  /// a `__mode` field. The [mode] string should be one of `'k'`, `'v'`,
+  /// or `'kv'`.
+  void registerWeakTable(LuaTable table, String mode) {
+    table.weakMode = mode;
+    if (!_weakTables.contains(table)) {
+      _weakTables.add(table);
+    }
+  }
+
+  /// Unregister a table from weak table tracking.
+  ///
+  /// Called when [setmetatable] is called with `nil` or a metatable
+  /// that has no `__mode` field.
+  void unregisterWeakTable(LuaTable table) {
+    table.weakMode = null;
+    _weakTables.remove(table);
   }
 
   // ── Collection control ─────────────────────────────────────────────
@@ -315,12 +343,82 @@ class LuaGarbageCollector {
 
   // ── Sweep phase ────────────────────────────────────────────────────
 
-  /// Initialize the sweep phase: snapshot the object set and start
-  /// iterating from the beginning.
+  /// Initialize the sweep phase: clean weak tables, snapshot the object
+  /// set, and start iterating from the beginning.
   void _startSweep() {
     _phase = GcPhase.sweep;
+
+    // Clean weak tables BEFORE sweeping: remove entries whose weakly-
+    // referenced keys/values are still white (unreachable).
+    _cleanWeakTables();
+
     _sweepList = _allObjects.toList();
     _sweepIndex = 0;
+  }
+
+  // ── Weak table cleanup ──────────────────────────────────────────────
+
+  /// Clean all weak tables before the sweep phase.
+  ///
+  /// For each reachable weak table, removes entries whose weakly-referenced
+  /// keys and/or values are still white (unreachable). Unreachable weak
+  /// tables are removed from the tracking list.
+  void _cleanWeakTables() {
+    for (int i = _weakTables.length - 1; i >= 0; i--) {
+      final table = _weakTables[i];
+
+      // If the weak table itself is unreachable, remove it from tracking.
+      // It will be handled by the sweep phase (moved to tobefnz or removed).
+      if (table.isWhite) {
+        _weakTables.removeAt(i);
+        continue;
+      }
+
+      // Clean weak references in reachable tables.
+      if (table.hasWeakKeys) {
+        _cleanWeakKeys(table);
+      }
+      if (table.hasWeakValues) {
+        _cleanWeakValues(table);
+      }
+    }
+  }
+
+  /// Remove entries from [table]'s hash map whose keys are unreachable
+  /// (white) GCObjects.
+  void _cleanWeakKeys(LuaTable table) {
+    if (table.map == null) return;
+    table.map!.removeWhere((key, value) {
+      return key is GCObject && key.isWhite;
+    });
+    table.changed = true;
+  }
+
+  /// Remove entries from [table] whose values are unreachable (white)
+  /// GCObjects. Handles both the array part and the hash map part.
+  void _cleanWeakValues(LuaTable table) {
+    // Clean array part: null out weak values that are unreachable.
+    if (table.arr != null) {
+      for (int i = 0; i < table.arr!.length; i++) {
+        final v = table.arr![i];
+        if (v is GCObject && v.isWhite) {
+          table.arr![i] = null;
+        }
+      }
+      // Only remove TRAILING nulls. Unlike shrinkArray() which removes
+      // ALL null entries, we must preserve interior nulls to maintain
+      // the correct index mapping (Lua index i → arr[i-1]).
+      while (table.arr!.isNotEmpty && table.arr!.last == null) {
+        table.arr!.removeLast();
+      }
+    }
+    // Clean map part: remove entries whose values are unreachable.
+    if (table.map != null) {
+      table.map!.removeWhere((key, value) {
+        return value is GCObject && value.isWhite;
+      });
+    }
+    table.changed = true;
   }
 
   /// Incremental sweep.
@@ -478,6 +576,7 @@ class LuaGarbageCollector {
       'collections': _cycleCount,
       'objects': _allObjects.length,
       'tobefnz': _tobefnz.length,
+      'weaktables': _weakTables.length,
       'isrunning': _running,
       'mode': _running ? 'incremental' : 'stopped',
       'phase': _phase.name,

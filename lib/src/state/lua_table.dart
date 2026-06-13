@@ -15,6 +15,21 @@ class LuaTable with GCObject {
   Object? lastKey;
   late bool changed;
 
+  /// Weak reference mode, null means non-weak table.
+  /// 'k' = weak keys, 'v' = weak values, 'kv' = both.
+  ///
+  /// Set when [setmetatable] is called with a metatable containing `__mode`.
+  /// Matches Lua 5.3 behavior: the mode is captured at setmetatable time,
+  /// subsequent changes to the metatable's __mode field do not affect
+  /// the table's weak status.
+  String? weakMode;
+
+  /// Whether this table has weak keys.
+  bool get hasWeakKeys => weakMode != null && weakMode!.contains('k');
+
+  /// Whether this table has weak values.
+  bool get hasWeakValues => weakMode != null && weakMode!.contains('v');
+
   LuaTable(int nArr, int nRec) {
     if (nArr > 0) {
       arr = <Object?>[];
@@ -184,18 +199,22 @@ class LuaTable with GCObject {
     // Metatable is always a strong reference.
     if (metatable != null) visit(metatable!);
 
-    // Array values.
-    if (arr != null) {
+    // Array values: skip if values are weak.
+    if (arr != null && !hasWeakValues) {
       for (final v in arr!) {
         if (v is GCObject) visit(v);
       }
     }
 
-    // Hash map: keys and values can both be GCObjects.
+    // Hash map: skip keys and/or values according to weak mode.
     if (map != null) {
       for (final entry in map!.entries) {
-        if (entry.key is GCObject) visit(entry.key as GCObject);
-        if (entry.value is GCObject) visit(entry.value as GCObject);
+        if (!hasWeakKeys && entry.key is GCObject) {
+          visit(entry.key as GCObject);
+        }
+        if (!hasWeakValues && entry.value is GCObject) {
+          visit(entry.value as GCObject);
+        }
       }
     }
   }
