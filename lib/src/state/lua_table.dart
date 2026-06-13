@@ -30,6 +30,34 @@ class LuaTable with GCObject {
   /// Whether this table has weak values.
   bool get hasWeakValues => weakMode != null && weakMode!.contains('v');
 
+  // ── Cached __mode lookup ───────────────────────────────────────────
+  //
+  // Avoids repeated get('__mode') hash lookups in _setMetatable.
+  // The mode is cached on first access and invalidated only when
+  // [put] writes to the __mode field
+
+  Object? _modeCache;
+  bool _modeResolved = false;
+
+  /// Returns the `__mode` field of this table (cached).
+  ///
+  /// On first call, looks up `get('__mode')` and caches the result.
+  /// Subsequent calls return the cached value.  The cache is
+  /// automatically invalidated when [put] writes to  the __mode field.
+  Object? getMode() {
+    if (!_modeResolved) {
+      _modeResolved = true;
+      _modeCache = get('__mode');
+    }
+    return _modeCache;
+  }
+
+  /// Invalidate the cached `__mode` lookup.
+  void invalidateModeCache() {
+    _modeResolved = false;
+    _modeCache = null;
+  }
+
   LuaTable(int nArr, int nRec) {
     if (nArr > 0) {
       arr = <Object?>[];
@@ -69,6 +97,9 @@ class LuaTable with GCObject {
       throw Exception("table index is NaN!");
     }
     changed = true;
+    // Only invalidate __mode cache when the key being written is '__mode'.
+    // Writing other keys cannot change the result of get('__mode').
+    if (key == '__mode') invalidateModeCache();
     key = floatToInteger(key);
     if (key is int) {
       int idx = key;

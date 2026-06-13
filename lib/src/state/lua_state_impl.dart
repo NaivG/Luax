@@ -168,7 +168,7 @@ class LuaStateImpl with GCObject implements LuaState, LuaVM {
       // Lua 5.3 captures the weak mode at setmetatable time; subsequent
       // changes to the metatable's __mode field do not affect the table.
       if (mt != null) {
-        final mode = mt.get('__mode');
+        final mode = mt.getMode();
         if (mode is String) {
           _gc.registerWeakTable(val, mode);
         } else {

@@ -69,6 +69,11 @@ class LuaGarbageCollector {
   /// Objects awaiting `__gc` finalization.
   final List<GCObject> _tobefnz = [];
 
+  /// Cached `__gc` functions corresponding 1-to-1 with [_tobefnz].
+  /// Populated during `_processDead` so `_runFinalize` avoids a second
+  /// `mt.get('__gc')` hash lookup.
+  final List<Object?> _tobefnzGc = [];
+
   /// Tables with weak references (`__mode`).
   ///
   /// Registered when [setmetatable] is called with a metatable that has
@@ -187,7 +192,6 @@ class LuaGarbageCollector {
     _startSweep();
     _sweepStep(_unlimitedWork);
     _runFinalize();
-    _cycleCount++;
   }
 
   /// A very large work value used for full-cycle operations like [fullCycle].
@@ -459,8 +463,10 @@ class LuaGarbageCollector {
   /// Separate dead objects into finalizable (→ tobefnz) and reclaimable.
   void _processDead(List<GCObject> dead) {
     for (final obj in dead) {
-      if (_hasGcMetamethod(obj)) {
+      final gc = _getGcMetamethod(obj);
+      if (gc != null) {
         _tobefnz.add(obj);
+        _tobefnzGc.add(gc);
         // Keep the object alive during finalization.
         // It stays in _allObjects; __gc may resurrect it.
       } else {
@@ -491,6 +497,7 @@ class LuaGarbageCollector {
     }
 
     // Compute survived bytes.
+    // Cannot simply use _totalBytes here because estimatedSize is dynamic.
     _lastSurvived = 0;
     for (final obj in _allObjects) {
       _lastSurvived += obj.estimatedSize;
@@ -515,11 +522,15 @@ class LuaGarbageCollector {
   /// Lua 5.3's behavior where the most recently created objects are
   /// finalized first.
   void _runFinalize() {
-    _phase = GcPhase.finalize;
+    // Guard: if already in pause (no finalizers pending),
+    // _afterSweep already incremented _cycleCount — nothing to do.
+    // New finalizers will be detected during the next cycle.
+    if (_phase != GcPhase.finalize) return;
 
     while (_tobefnz.isNotEmpty) {
       final obj = _tobefnz.removeLast();
-      _callGcMetamethod(obj);
+      final gcFn = _tobefnzGc.removeLast();
+      _callGcMetamethod(obj, gcFn);
       // After __gc runs, the object stays in _allObjects.
       // If Lua code re-references it, it survives the next cycle.
       // If it becomes unreachable again, it will be collected and
@@ -532,17 +543,17 @@ class LuaGarbageCollector {
 
   // ── __gc helpers ───────────────────────────────────────────────────
 
-  bool _hasGcMetamethod(GCObject obj) {
+  /// Returns the `__gc` metamethod of [obj], or `null` if absent.
+  /// Called once during `_processDead`; the result is stored in
+  /// [_tobefnzGc] so `_runFinalize` does not need to look it up again.
+  Object? _getGcMetamethod(GCObject obj) {
     final mt = _getMetatableOf(obj);
-    if (mt == null) return false;
-    return mt.get('__gc') != null;
+    if (mt == null) return null;
+    return mt.get('__gc');
   }
 
-  void _callGcMetamethod(GCObject obj) {
+  void _callGcMetamethod(GCObject obj, Object? gcFn) {
     try {
-      final mt = _getMetatableOf(obj);
-      if (mt == null) return;
-      final gcFn = mt.get('__gc');
       if (gcFn is! Closure) return;
 
       _state.pushObjectRaw(gcFn);
