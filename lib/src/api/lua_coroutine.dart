@@ -36,6 +36,16 @@ abstract class LuaCoroutineLib {
   /// Resumes a suspended coroutine.
   void resume(int nArgs);
 
+  /// Async counterpart of [call] for the first invocation of a coroutine.
+  ///
+  /// Like [LuaBasicAPI.callAsync] but additionally sets the
+  /// `_insideResumeAsync` flag on the coroutine thread so that host async
+  /// functions called via plain CALL (without `await`) inside the coroutine
+  /// body are transparently awaited. Use this at the first resume of a
+  /// coroutine where [resumeAsync] cannot be used because the closure has
+  /// not yet started executing.
+  Future<void> callCoroutineAsync(int nArgs);
+
   /// Asynchronously resumes a suspended coroutine.
   ///
   /// Use this when the coroutine body may call host-registered async

@@ -1276,6 +1276,23 @@ class LuaStateImpl with GCObject implements LuaState, LuaVM {
   Future<void> callAsync(int nArgs, int nResults) =>
       _callTargetAsync(nArgs, nResults, alwaysAwait: true);
 
+  /// Async call for the first invocation of a coroutine.
+  ///
+  /// Like [callAsync] but sets [_insideResumeAsync] so that host async
+  /// functions called via plain CALL (without `await`) inside the coroutine
+  /// body are transparently awaited in the same way as [resumeAsync].
+  /// The nResults is fixed to [`luaMultret`] (-1) to obtain all return
+  /// values from the coroutine, matching the behaviour of [resumeAsync].
+  @override
+  Future<void> callCoroutineAsync(int nArgs) async {
+    _insideResumeAsync = true;
+    try {
+      await callAsync(nArgs, -1);
+    } finally {
+      _insideResumeAsync = false;
+    }
+  }
+
   /// Push the "attempt to call async function `name` without
   /// await or in non-async context" error tuple onto the stack
   /// in place of an un-awaited call to a host async closure.

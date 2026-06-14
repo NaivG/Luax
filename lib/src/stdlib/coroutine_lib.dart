@@ -137,7 +137,7 @@ class CoroutineLib {
 
     try {
       if (co.getStatus() == ThreadStatus.luaOk) {
-        await co.callAsync(nArgs, -1);
+        await co.callCoroutineAsync(nArgs);
       } else if (co.getStatus() == ThreadStatus.luaYield) {
         co.setStatus(ThreadStatus.luaOk);
         await co.resumeAsync(nArgs);
