@@ -447,8 +447,10 @@ void main() {
         expect(lua.isNil(-2), isTrue,
             reason: 'first return value should be nil');
         final err = lua.toStr(-1);
-        expect(err,
-            equals("attempt to call async function `asyncOnly` without await or in non-async context"));
+        expect(
+            err,
+            equals(
+                "attempt to call async function `asyncOnly` without await or in non-async context"));
       });
 
       test('sync call() honours nResults for async closures', () {
@@ -501,8 +503,10 @@ void main() {
         lua.pop(1);
 
         lua.getGlobal('HAS_ERR');
-        expect(lua.toStr(-1),
-            equals('attempt to call async function `asyncAdd` without await or in non-async context'));
+        expect(
+            lua.toStr(-1),
+            equals(
+                'attempt to call async function `asyncAdd` without await or in non-async context'));
       });
 
       test('single-result call: error string is truncated, only nil is kept',
