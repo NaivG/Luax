@@ -95,10 +95,16 @@ abstract class LuaBasicAPI {
   void pushDartClosure(DartFunction f, int n);
 
   /// Push an async Dart function onto the stack.
-  void pushDartFunctionAsync(DartFunctionAsync f);
+  /// [name] is an optional human-readable name used to format the
+  /// "attempt to call async function `name` without await or in 
+  /// non-async context" runtime error message.
+  void pushDartFunctionAsync(DartFunctionAsync f, [String? name]);
 
   /// Push an async Dart closure onto the stack with upvalues.
-  void pushDartClosureAsync(DartFunctionAsync f, int n);
+  /// [name] is an optional human-readable name used to format the
+  /// "attempt to call async function `name` without await or in 
+  /// non-async context" runtime error message.
+  void pushDartClosureAsync(DartFunctionAsync f, int n, [String? name]);
 
   void pushGlobalTable();
 

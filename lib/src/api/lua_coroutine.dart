@@ -36,6 +36,15 @@ abstract class LuaCoroutineLib {
   /// Resumes a suspended coroutine.
   void resume(int nArgs);
 
+  /// Asynchronously resumes a suspended coroutine.
+  ///
+  /// Use this when the coroutine body may call host-registered async
+  /// functions (registered via [LuaAuxLib.registerAsync]) without the
+  /// `await` keyword. The async dispatch in [LuaStateImpl] treats the
+  /// coroutine thread as the suspension point, so async calls inside the
+  /// coroutine body are awaited transparently.
+  Future<void> resumeAsync(int nArgs);
+
   /// Returns the unique ID of this thread.
   int runningId();
 

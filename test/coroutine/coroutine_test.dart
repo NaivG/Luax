@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:luax/lua.dart';
 import 'package:test/test.dart';
 
@@ -135,6 +137,71 @@ void main() {
       ls.pCall(0, 2, 0);
       expect(ls.toBoolean(-2), isFalse);
       expect(ls.toStr(-1), contains('dead'));
+    });
+
+    test(
+        'coroutine body can call host async function without await via resumeAsync',
+        () async {
+      // Inside a coroutine, direct calls to host async functions are
+      // transparent: the coroutine suspension point (coroutine.resumeAsync)
+      // acts as the `await` keyword.
+      ls.registerAsync('asyncGreet', (LuaState ls) async {
+        await Future.delayed(Duration(milliseconds: 5));
+        ls.pushString('Hello, ${ls.toStr(1)}!');
+        return 1;
+      });
+
+      final code = '''
+        local co = coroutine.create(function(name)
+          -- Direct call (no `await`) — would be an error tuple on the main
+          -- thread, but inside a coroutine body it is awaited transparently.
+          return asyncGreet(name)
+        end)
+        local ok, msg = await coroutine.resumeAsync(co, 'World')
+        return ok, msg
+      ''';
+      final loadOk = ls.loadString(code);
+      expect(loadOk, equals(ThreadStatus.luaOk));
+      final status = await ls.pCallAsync(0, 2, 0);
+      expect(status, equals(ThreadStatus.luaOk));
+      expect(ls.toBoolean(-2), isTrue);
+      expect(ls.toStr(-1), equals('Hello, World!'));
+    });
+
+    test('coroutine.resumeAsync returns yielded values', () async {
+      // The async counterpart of coroutine.resume must still surface
+      // coroutine.yield's values to the caller.
+      final code = '''
+        local co = coroutine.create(function()
+          coroutine.yield(1, 2, 3)
+          coroutine.yield(4, 5, 6)
+        end)
+        local ok1, a, b, c = await coroutine.resumeAsync(co)
+        local ok2, d, e, f = await coroutine.resumeAsync(co)
+        return a + b + c, d + e + f
+      ''';
+      final loadOk = ls.loadString(code);
+      expect(loadOk, equals(ThreadStatus.luaOk));
+      final status = await ls.pCallAsync(0, 2, 0);
+      expect(status, equals(ThreadStatus.luaOk));
+      expect(ls.toInteger(-2), equals(6));
+      expect(ls.toInteger(-1), equals(15));
+    });
+
+    test('coroutine.resumeAsync propagates errors as (false, msg)', () async {
+      final code = '''
+        local co = coroutine.create(function()
+          error('boom')
+        end)
+        local ok, msg = await coroutine.resumeAsync(co)
+        return ok, msg
+      ''';
+      final loadOk = ls.loadString(code);
+      expect(loadOk, equals(ThreadStatus.luaOk));
+      final status = await ls.pCallAsync(0, 2, 0);
+      expect(status, equals(ThreadStatus.luaOk));
+      expect(ls.toBoolean(-2), isFalse);
+      expect(ls.toStr(-1), contains('boom'));
     });
   });
 }

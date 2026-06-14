@@ -78,6 +78,13 @@ class LuaStateImpl with GCObject implements LuaState, LuaVM {
   /// Thread status for coroutines
   ThreadStatus status = ThreadStatus.luaOk;
 
+  /// Whether we are currently executing inside [resumeAsync].
+  ///
+  /// When true, plain CALL to an async Dart closure transparently awaits
+  /// instead of pushing a `(nil, error)` tuple — the [resumeAsync] call
+  /// itself provides the suspension point in lieu of the `await` keyword.
+  bool _insideResumeAsync = false;
+
   /// Debug hook list
   final List<HookContext> hookList = [];
 
@@ -698,12 +705,11 @@ class LuaStateImpl with GCObject implements LuaState, LuaVM {
       if (c.proto != null) {
         _callLuaClosure(nArgs, nResults, c);
       } else if (c.isAsync) {
-        // Async Dart closures cannot be invoked from the synchronous call
-        // path — the VM instruction loop has no way to await. Use pCallAsync
-        // or callAsync instead.
-        throw Exception(_stack!.formatError(
-            'attempt to call an async Dart function from synchronous context '
-            '(use pCallAsync / callAsync)'));
+        // Host-registered async function called without `await`.
+        // Surface the result as the standard error tuple so Lua scripts can
+        // branch on it; the surrounding CALL/ACALL instruction then places
+        // the tuple into the result registers via [Instructions.popResults].
+        _pushAsyncNotAwaitedError(nArgs, nResults, c.name);
       } else {
         _callDartClosure(nArgs, nResults, c);
       }
@@ -985,6 +991,9 @@ class LuaStateImpl with GCObject implements LuaState, LuaVM {
             break;
           case 46:
             break; // EXTRAARG — consumed by preceding instruction
+          case 47:
+            Instructions.aCall(inst, this);
+            break;
         }
         // Periodically check GC debt.
         if (++gcCounter >= GcConstants.instructionInterval) {
@@ -1122,6 +1131,11 @@ class LuaStateImpl with GCObject implements LuaState, LuaVM {
             await _execCallAsync(inst);
             break;
 
+          // ── ACALL: await-aware variant of CALL; never errors on async ─
+          case 47:
+            await _execCallAsync(inst, alwaysAwait: true);
+            break;
+
           // ── TAILCALL: return R(A)(R(A+1),...,R(A+B-1)) ────────────────
           case 37:
             await _execTailCallAsync(inst);
@@ -1172,15 +1186,16 @@ class LuaStateImpl with GCObject implements LuaState, LuaVM {
   //  Async-aware helpers for CALL / TAILCALL / TFORCALL
   // ---------------------------------------------------------------------------
 
-  /// Async version of [Instructions.call].
+  /// CALL/ACALL handler. [alwaysAwait] is true for the ACALL opcode
+  /// (the `await` keyword in source) and false for the plain CALL opcode.
   /// Resolves the callee; if it is an async Dart closure the call is
   /// dispatched through [callAsync] so the Future can be awaited.
-  Future<void> _execCallAsync(int inst) async {
+  Future<void> _execCallAsync(int inst, {bool alwaysAwait = false}) async {
     final int a = Instruction.getA(inst) + 1;
     final int b = Instruction.getB(inst);
     final int c = Instruction.getC(inst);
     final int nArgs = Instructions.pushFuncAndArgs(a, b, this);
-    await _callTargetAsync(nArgs, c - 1);
+    await _callTargetAsync(nArgs, c - 1, alwaysAwait: alwaysAwait);
     Instructions.popResults(a, c, this);
   }
 
@@ -1204,9 +1219,19 @@ class LuaStateImpl with GCObject implements LuaState, LuaVM {
     Instructions.popResults(a + 3, c + 1, this);
   }
 
-  /// Core dispatch: like [call] but awaits async Dart closures and
+  /// Core async dispatch: like [call] but awaits async Dart closures and
   /// recursively enters [_runLuaClosureAsync] for Lua closures.
-  Future<void> _callTargetAsync(int nArgs, int nResults) async {
+  ///
+  /// When [alwaysAwait] is false (the default, used by the plain CALL
+  /// opcode) and the target is an async Dart closure, the main-thread
+  /// path surfaces a `(nil, error)` tuple via [_pushAsyncNotAwaitedError];
+  /// coroutine bodies await the closure directly because the suspension
+  /// point is the surrounding `coroutine.resumeAsync` call. When
+  /// [alwaysAwait] is true (used by the ACALL opcode, i.e. the `await`
+  /// keyword, and by the public [callAsync] entry point) the closure is
+  /// always awaited.
+  Future<void> _callTargetAsync(int nArgs, int nResults,
+      {bool alwaysAwait = false}) async {
     Object? val = _stack!.get(-(nArgs + 1));
     Object? f = val is Closure ? val : null;
 
@@ -1225,7 +1250,16 @@ class LuaStateImpl with GCObject implements LuaState, LuaVM {
       if (c.proto != null) {
         await _callLuaClosureAsync(nArgs, nResults, c);
       } else if (c.isAsync) {
-        await _callDartClosureAsync(nArgs, nResults, c);
+        if (alwaysAwait || _insideResumeAsync) {
+          // `await` is explicit, or we are inside a coroutine body whose
+          // resume call provides the suspension point.
+          await _callDartClosureAsync(nArgs, nResults, c);
+        } else {
+          // Direct call to a host async function without `await` on the
+          // main thread — surface the (nil, error) tuple so the script
+          // can branch.
+          _pushAsyncNotAwaitedError(nArgs, nResults, c.name);
+        }
       } else {
         _callDartClosure(nArgs, nResults, c);
       }
@@ -1237,33 +1271,49 @@ class LuaStateImpl with GCObject implements LuaState, LuaVM {
 
   /// Asynchronously call a function.
   /// This handles both sync and async Dart functions as well as Lua closures.
+  /// Always awaits async Dart closures — see [_callTargetAsync].
   @override
-  Future<void> callAsync(int nArgs, int nResults) async {
-    Object? val = _stack!.get(-(nArgs + 1));
-    Object? f = val is Closure ? val : null;
+  Future<void> callAsync(int nArgs, int nResults) =>
+      _callTargetAsync(nArgs, nResults, alwaysAwait: true);
 
-    if (f == null) {
-      Object? mf = _getMetafield(val, "__call");
-      if (mf != null && mf is Closure) {
-        _stack!.push(f);
-        insert(-(nArgs + 2));
-        nArgs += 1;
-        f = mf;
-      }
+  /// Push the "attempt to call async function `name` without
+  /// await or in non-async context" error tuple onto the stack
+  /// in place of an un-awaited call to a host async closure.
+  ///
+  /// `nArgs` function+argument values have already been pushed onto the
+  /// stack by [Instructions.pushFuncAndArgs] and are popped here. The error
+  /// tuple `(nil, "<message>")` is then pushed, padded with `nil`s so that
+  /// exactly [nResults] values are available for [Instructions.popResults]
+  /// to copy into the call-result registers.
+  ///
+  /// - `nResults == 0`  : statement call; nothing is placed in registers.
+  /// - `nResults == -1` : multret (c == 0); the two values are left on the
+  ///   stack and [Instructions.popResults] will push the result-register
+  ///   index, signalling the caller to read from the stack.
+  /// - `nResults > 0`   : exactly [nResults] values are pushed.
+  void _pushAsyncNotAwaitedError(int nArgs, int nResults, String? name) {
+    // Discard function + args already pushed by pushFuncAndArgs.
+    _stack!.popN(nArgs + 1);
+
+    if (nResults == 0) {
+      // Statement call — caller discards all return values. Match Lua
+      // semantics: nothing placed in registers, error is lost.
+      return;
     }
 
-    if (f != null) {
-      Closure c = f as Closure;
-      if (c.proto != null) {
-        await _callLuaClosureAsync(nArgs, nResults, c);
-      } else if (c.isAsync) {
-        await _callDartClosureAsync(nArgs, nResults, c);
+    final fallback = '<host async function>';
+    final msg =
+        'attempt to call async function `${name ?? fallback}` without await or in non-async context';
+
+    // nResults < 0 is multret — push exactly two values (nil + error).
+    // Caller uses popResults' "leave on stack" branch.
+    final int total = nResults < 0 ? 2 : nResults;
+    for (int i = 0; i < total; i++) {
+      if (i == 1) {
+        _stack!.push(msg);
       } else {
-        _callDartClosure(nArgs, nResults, c);
+        _stack!.push(null); // nil
       }
-    } else {
-      throw Exception(
-          _stack!.formatError("attempt to call a non-function value"));
     }
   }
 
@@ -1370,13 +1420,13 @@ class LuaStateImpl with GCObject implements LuaState, LuaVM {
   }
 
   @override
-  void pushDartFunctionAsync(DartFunctionAsync f) {
-    _stack!.push(Closure.DartFuncAsync(f, 0));
+  void pushDartFunctionAsync(DartFunctionAsync f, [String? name]) {
+    _stack!.push(Closure.DartFuncAsync(name, f, 0));
   }
 
   @override
-  void pushDartClosureAsync(DartFunctionAsync f, int n) {
-    Closure closure = Closure.DartFuncAsync(f, n);
+  void pushDartClosureAsync(DartFunctionAsync f, int n, [String? name]) {
+    Closure closure = Closure.DartFuncAsync(name, f, n);
     for (int i = n; i > 0; i--) {
       Object? val = _stack!.pop();
       closure.upvals[i - 1] = UpvalueHolder.value(val);
@@ -1392,7 +1442,7 @@ class LuaStateImpl with GCObject implements LuaState, LuaVM {
 
   @override
   void registerAsync(String name, DartFunctionAsync f) {
-    pushDartFunctionAsync(f);
+    pushDartFunctionAsync(f, name);
     setGlobal(name);
   }
 
@@ -2120,21 +2170,15 @@ class LuaStateImpl with GCObject implements LuaState, LuaVM {
     return status;
   }
 
-  @override
-  void resume(int nArgs) {
-    // Resume execution from a yield point.
-    if (_stack!.closure == null) {
-      throw Exception('No closure to resume');
-    }
-
-    // The resume arguments (pushed by xmove in _coResume) sit on top of
-    // the current frame's stack.  They must be placed into the registers
-    // where the interrupted CALL instruction expects its results — exactly
-    // what popResults would have done had the CALL completed normally.
+  /// Places resume arguments into the interrupted CALL's result slots.
+  /// Shared by [resume] and [resumeAsync].
+  void _placeResumeArgs(int nArgs) {
     if (_stack!.closure!.proto != null && _stack!.pc > 0) {
       final prevInstr = _stack!.closure!.proto!.code[_stack!.pc - 1];
       final opCode = Instruction.getOpCode(prevInstr);
-      if (opCode.name == "CALL" || opCode.name == "TAILCALL") {
+      if (opCode.name == "CALL" ||
+          opCode.name == "TAILCALL" ||
+          opCode.name == "ACALL") {
         final a = Instruction.getA(prevInstr) + 1;
         final c = Instruction.getC(prevInstr);
         if (c == 1) {
@@ -2157,54 +2201,89 @@ class LuaStateImpl with GCObject implements LuaState, LuaVM {
         }
       }
     }
+  }
 
-    // Continue the innermost frame that was interrupted by yield.
-    _runLuaClosure();
+  /// Unwinds one completed Lua frame: pops its results, advances to the
+  /// parent frame, and propagates results into the parent's CALL registers.
+  /// Shared by [resume] and [resumeAsync]; the caller must invoke the
+  /// appropriate variant of _runLuaClosure* after this returns.
+  void _unwindAndPropagate() {
+    final innerStack = _stack!;
+    final nRegs = innerStack.closure?.proto?.maxStackSize ?? 0;
+    final results = innerStack.popN(innerStack.top() - nRegs);
 
-    // Unwind nested Lua function calls that were interrupted by yield.
-    // Stop when the parent frame has no Lua proto (i.e. it's the root).
-    while (_stack!.prev != null && _stack!.prev!.closure?.proto != null) {
-      final innerStack = _stack!;
-      final nRegs = innerStack.closure?.proto?.maxStackSize ?? 0;
-      final results = innerStack.popN(innerStack.top() - nRegs);
+    _popLuaStack();
 
-      _popLuaStack();
+    // The outer frame's PC is past the CALL instruction that invoked
+    // the inner function (fetch() advanced it before executing CALL).
+    final callInstr = _stack!.closure!.proto!.code[_stack!.pc - 1];
+    final a = Instruction.getA(callInstr) + 1;
+    final c = Instruction.getC(callInstr);
 
-      // The outer frame's PC is past the CALL instruction that invoked
-      // the inner function (fetch() advanced it before executing CALL).
-      final callInstr = _stack!.closure!.proto!.code[_stack!.pc - 1];
-      final a = Instruction.getA(callInstr) + 1;
-      final c = Instruction.getC(callInstr);
-
-      // Place results into the correct registers, mirroring popResults.
-      if (c == 1) {
-        // No results expected.
-      } else if (c > 1) {
-        final nResults = c - 1;
-        _stack!.pushN(results, nResults);
-        for (int j = a + nResults - 1; j >= a; j--) {
-          replace(j);
-        }
-      } else {
-        // c == 0: variable results — leave on stack.
-        _stack!.pushN(results, results.length);
-        checkStack(1);
-        pushInteger(a);
+    // Place results into the correct registers, mirroring popResults.
+    if (c == 1) {
+      // No results expected.
+    } else if (c > 1) {
+      final nResults = c - 1;
+      _stack!.pushN(results, nResults);
+      for (int j = a + nResults - 1; j >= a; j--) {
+        replace(j);
       }
-
-      // Continue the outer frame's bytecode.
-      _runLuaClosure();
+    } else {
+      // c == 0: variable results — leave on stack.
+      _stack!.pushN(results, results.length);
+      checkStack(1);
+      pushInteger(a);
     }
+  }
 
-    // The current frame is now the coroutine body function, sitting
-    // above the root frame. Pop it and transfer only the return values
-    // so that _coResume's co.getTop() sees results, not locals.
+  /// Pops the coroutine body frame and transfers only the return values
+  /// onto the root frame so that _coResume's co.getTop() sees results.
+  /// Shared by [resume] and [resumeAsync].
+  void _popBodyFrame() {
     if (_stack!.prev != null && _stack!.closure?.proto != null) {
       final bodyStack = _stack!;
       final nRegs = bodyStack.closure!.proto!.maxStackSize;
       final results = bodyStack.popN(bodyStack.top() - nRegs);
       _popLuaStack();
       _stack!.pushN(results, results.length);
+    }
+  }
+
+  @override
+  void resume(int nArgs) {
+    if (_stack!.closure == null) {
+      throw Exception('No closure to resume');
+    }
+    _placeResumeArgs(nArgs);
+    _runLuaClosure();
+
+    while (_stack!.prev != null && _stack!.prev!.closure?.proto != null) {
+      _unwindAndPropagate();
+      _runLuaClosure();
+    }
+
+    _popBodyFrame();
+  }
+
+  @override
+  Future<void> resumeAsync(int nArgs) async {
+    if (_stack!.closure == null) {
+      throw Exception('No closure to resume');
+    }
+    _insideResumeAsync = true;
+    try {
+      _placeResumeArgs(nArgs);
+      await _runLuaClosureAsync();
+
+      while (_stack!.prev != null && _stack!.prev!.closure?.proto != null) {
+        _unwindAndPropagate();
+        await _runLuaClosureAsync();
+      }
+
+      _popBodyFrame();
+    } finally {
+      _insideResumeAsync = false;
     }
   }
 

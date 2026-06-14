@@ -12,12 +12,28 @@ class PrefixExpParser {
         | prefixexp [‘:’ Name] args
     */
   static Exp parsePrefixExp(Lexer lexer) {
+    // `await` is a hard reserved keyword. The lexer emits TOKEN_KW_AWAIT,
+    // so detection is a single-token check — no lookahead needed.
+    if (lexer.LookAhead() == TokenKind.TOKEN_KW_AWAIT) {
+      Token kw = lexer.nextTokenOfKind(TokenKind.TOKEN_KW_AWAIT);
+      Exp inner = parsePrefixExp(lexer);
+      // Chain table accesses / method calls until we have a FuncCallExp.
+      // e.g. `await obj.method()` chains obj.method() — finishPrefixExp
+      // produces the FuncCallExp from the inner prefix expression.
+      inner = finishPrefixExp(lexer, inner);
+      if (inner is! FuncCallExp) {
+        throw Exception(
+            "await requires a function call expression (line ${kw.line})");
+      }
+      return AwaitExp(inner);
+    }
+
     Exp exp;
     if (lexer.LookAhead() == TokenKind.TOKEN_IDENTIFIER) {
       Token id = lexer.nextIdentifier(); // Name
       exp = NameExp(id.line, id.value);
     } else {
-      // ‘(’ exp ‘)’
+      // ‘(‘ exp ‘)’
       exp = parseParensExp(lexer);
     }
     return finishPrefixExp(lexer, exp);

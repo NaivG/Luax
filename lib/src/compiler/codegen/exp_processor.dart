@@ -53,6 +53,8 @@ class ExpProcessor {
       processTableAccessExp(fi, node, a);
     } else if (node is FuncCallExp) {
       processFuncCallExp(fi, node, a, n);
+    } else if (node is AwaitExp) {
+      processAwaitExp(fi, node, a, n);
     }
   }
 
@@ -227,6 +229,14 @@ class ExpProcessor {
   static void processFuncCallExp(FuncInfo fi, FuncCallExp node, int a, int n) {
     int nArgs = prepFuncCall(fi, node, a);
     fi.emitCall(node.line, a, nArgs, n);
+  }
+
+  // r[a] = await f(args) — await-aware call.
+  // Emits OP_ACALL which suspends the VM and resumes when the host async
+  // function completes (only valid inside an async VM context).
+  static void processAwaitExp(FuncInfo fi, AwaitExp node, int a, int n) {
+    int nArgs = prepFuncCall(fi, node.inner, a);
+    fi.emitAsyncCall(node.line, a, nArgs, n);
   }
 
   // return f(args)

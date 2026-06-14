@@ -151,3 +151,11 @@ class FuncCallExp extends PrefixExp {
   FuncCallExp(
       {required this.prefixExp, required this.nameExp, required this.args});
 }
+
+/// `await <call>` — suspends the VM until the host async function completes.
+/// Only valid as a prefix to a function call expression.
+class AwaitExp extends Exp {
+  FuncCallExp inner;
+
+  AwaitExp(this.inner);
+}

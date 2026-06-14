@@ -50,7 +50,10 @@ class DoStat extends Stat {
 }
 
 class FuncCallStat extends Stat {
-  FuncCallExp exp;
+  /// Either a [FuncCallExp] or an [AwaitExp] wrapping one. AwaitExp is
+  /// allowed when the statement is `await func(args)` — the codegen for
+  /// the statement emits OP_ACALL instead of OP_CALL.
+  Exp exp;
 
   FuncCallStat(this.exp);
 }

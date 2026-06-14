@@ -55,6 +55,7 @@ enum TokenKind {
   TOKEN_KW_TRUE, // true
   TOKEN_KW_UNTIL, // until
   TOKEN_KW_WHILE, // while
+  TOKEN_KW_AWAIT, // await
   TOKEN_IDENTIFIER, // identifier
   TOKEN_NUMBER, // number literal
   TOKEN_STRING, // string literal
@@ -66,6 +67,7 @@ enum TokenKind {
 
 const Map keywords = const <String, TokenKind>{
   "and": TokenKind.TOKEN_OP_AND,
+  "await": TokenKind.TOKEN_KW_AWAIT,
   "break": TokenKind.TOKEN_KW_BREAK,
   "do": TokenKind.TOKEN_KW_DO,
   "else": TokenKind.TOKEN_KW_ELSE,

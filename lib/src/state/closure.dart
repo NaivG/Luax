@@ -8,6 +8,12 @@ class Closure with GCObject {
   final Prototype? proto;
   final DartFunction? dartFunc;
   final DartFunctionAsync? dartFuncAsync;
+
+  /// Optional human-readable name for the closure. Used by host-registered
+  /// async functions so the "attempt to call async function `name` without
+  /// await or in non-async context" error message can name the symbol that
+  /// was called.
+  final String? name;
   final List<UpvalueHolder?> upvals;
 
   /// Number of expected results for coroutine support
@@ -16,6 +22,7 @@ class Closure with GCObject {
   Closure(Prototype this.proto)
       : dartFunc = null,
         dartFuncAsync = null,
+        name = null,
         upvals = List<UpvalueHolder?>.filled(proto.upvalues.length, null) {
     LuaGarbageCollector.current?.register(this);
   }
@@ -23,11 +30,12 @@ class Closure with GCObject {
   Closure.DartFunc(this.dartFunc, int nUpvals)
       : proto = null,
         dartFuncAsync = null,
+        name = null,
         upvals = List<UpvalueHolder?>.filled(nUpvals, null) {
     LuaGarbageCollector.current?.register(this);
   }
 
-  Closure.DartFuncAsync(this.dartFuncAsync, int nUpvals)
+  Closure.DartFuncAsync(this.name, this.dartFuncAsync, int nUpvals)
       : proto = null,
         dartFunc = null,
         upvals = List<UpvalueHolder?>.filled(nUpvals, null) {

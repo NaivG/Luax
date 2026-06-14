@@ -416,6 +416,14 @@ class Instructions {
     popResults(a, c, vm);
   }
 
+  // ACALL: await-aware call. Only valid in async VM context.
+  // In a sync VM loop, the `await` keyword is meaningless because the VM
+  // cannot suspend — surface a clear error.
+  static void aCall(int i, LuaVM vm) {
+    throw Exception(
+        'await keyword requires async execution context (use doStringAsync / pCallAsync)');
+  }
+
   // return R(A), ... ,R(A+B-2)
   static void return_(int i, LuaVM vm) {
     int a = Instruction.getA(i) + 1;

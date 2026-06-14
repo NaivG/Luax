@@ -446,6 +446,13 @@ class FuncInfo {
     emitABC(line, OpCodeKind.CALL, a, nArgs + 1, nRet + 1);
   }
 
+  /// Emit an await-aware call (OP_ACALL) for `await f(args)` expressions.
+  /// The async VM loop awaits the callee; host async functions are awaited
+  /// transparently without producing the error tuple.
+  void emitAsyncCall(int line, int a, int nArgs, int nRet) {
+    emitABC(line, OpCodeKind.ACALL, a, nArgs + 1, nRet + 1);
+  }
+
 // return r[a](r[a+1], ... ,r[a+b-1])
   void emitTailCall(int line, int a, int nArgs) {
     emitABC(line, OpCodeKind.TAILCALL, a, nArgs + 1, 0);

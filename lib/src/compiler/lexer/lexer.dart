@@ -53,7 +53,8 @@ class Lexer {
   /// 当前行号
   int line;
 
-  // to support lookahead
+  // One-token lookahead cache. [LookAhead] populates [cachedNextToken];
+  // [nextToken] consumes it via [_shiftCache].
   Token? cachedNextToken;
   int? lineBackup;
 
@@ -67,6 +68,15 @@ class Lexer {
       cachedNextToken = nextToken();
     }
     return cachedNextToken!.kind;
+  }
+
+  /// Return the cached lookahead token and clear the cache.
+  /// Called from the hot path when a cached lookahead is consumed.
+  Token _shiftCache() {
+    final Token token = cachedNextToken!;
+    cachedNextToken = null;
+    lineBackup = null;
+    return token;
   }
 
   Token nextTokenOfKind(TokenKind? kind) {
@@ -85,11 +95,15 @@ class Lexer {
     if (useFast) return _nextTokenFast();
 
     if (cachedNextToken != null) {
-      Token token = cachedNextToken!;
-      cachedNextToken = null;
-      return token;
+      return _shiftCache();
     }
 
+    return _nextTokenSlowScan();
+  }
+
+  /// Slow-path scanner (String-based dispatch). Called from [nextToken]
+  /// when no cache is present.
+  Token _nextTokenSlowScan() {
     skipWhiteSpaces();
     if (chunk.length <= 0) {
       return Token(line, TokenKind.TOKEN_EOF, "EOF");
@@ -273,11 +287,15 @@ class Lexer {
   //     String.startsWith scan for fixed 2–3-char prefixes.
   Token _nextTokenFast() {
     if (cachedNextToken != null) {
-      final Token token = cachedNextToken!;
-      cachedNextToken = null;
-      return token;
+      return _shiftCache();
     }
 
+    return _nextTokenFastScan();
+  }
+
+  /// Fast-path scanner (code-unit dispatch). Called from [_nextTokenFast]
+  /// when no cache is present.
+  Token _nextTokenFastScan() {
     _skipWhiteSpacesFast();
     if (chunk.length <= 0) {
       return Token(line, TokenKind.TOKEN_EOF, "EOF");

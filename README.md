@@ -145,9 +145,13 @@ void main() {
 
 The wrapper function signature is `int Function(LuaState ls)`, where the return value indicates how many values are pushed onto the Lua stack.
 
-### Async Dart Functions
+### Async Function Calls
 
-Call async Dart code from Lua — useful for HTTP requests, file I/O, database queries, etc.
+Luax supports bidirectional async function calls between Dart and Lua.
+
+#### Dart Async API
+
+Call functions (both Dart and Lua) asynchronously from Dart. This is useful for HTTP requests, file I/O, database queries, and other async operations driven by Dart code.
 
 ```dart
 Future<int> fetchData(LuaState ls) async {
@@ -167,7 +171,7 @@ void main() async {
   // Register async function as a global
   state.registerAsync('fetchData', fetchData);
 
-  // Call it from Dart
+  // Call it from Dart using callAsync
   state.getGlobal('fetchData');
   state.pushString('https://api.example.com');
   await state.callAsync(1, 1);
@@ -175,7 +179,42 @@ void main() async {
 }
 ```
 
-**Async API reference:**
+#### Lua Calling Async Functions
+
+> [!important]
+> `await` keyword is a custom keyword in Luax **after 0.3.1**, NOT a part of the Lua language.
+> 
+> If you are using an older version of Luax, you can simply use the same syntax as sync functions.
+
+When Lua code calls an async-registered Dart function, it must use the `await` keyword or be running inside a coroutine (via `coroutine.create` and `coroutine.resumeAsync`).
+
+```lua
+-- `await` is a reserved keyword in Luax
+local result = await fetchData("https://api.example.com")
+print(result)
+
+-- Nested await
+local a = await fetchData("url1")
+local b = await fetchData("url2")
+
+-- Coroutine
+local co = coroutine.create(function()
+  local a = fetchData("url1")
+end)
+coroutine.resumeAsync(co)
+```
+
+> **Note:** `await` can only appear before a function call expression. Using it as a variable name or in any other identifier position is a syntax error.
+
+If an async function is called from Lua without `await` or outside a coroutine, the call will failed and returns `(nil, error_string)`:
+
+```lua
+local r, err = asyncFunc()
+-- r   = nil
+-- err = "attempt to call async function `asyncFunc` without await or in non-async context"
+```
+
+#### Async API Reference
 
 | Method | Description |
 |--------|-------------|

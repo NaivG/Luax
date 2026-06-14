@@ -12,8 +12,20 @@ class CoroutineLib {
     "running": _coRunning,
   };
 
+  /// Async counterpart of [coroutine.resume]. Registered separately as
+  /// `coroutine.resumeAsync` because the coroutine lib table only accepts
+  /// sync functions via [LuaState.newLib].
+  static final Map<String, DartFunctionAsync> _coAsyncFuncs = {
+    "resumeAsync": _coResumeAsync,
+  };
+
   static int openCoroutineLib(LuaState ls) {
     ls.newLib(_coFuncs);
+    // Register async functions individually.
+    for (final entry in _coAsyncFuncs.entries) {
+      ls.pushDartFunctionAsync(entry.value, entry.key);
+      ls.setField(-2, entry.key);
+    }
     return 1;
   }
 
@@ -84,6 +96,70 @@ class CoroutineLib {
     co.setStatus(ThreadStatus.luaDead);
 
     // Get all results from coroutine stack
+    int nResults = co.getTop();
+    ls.pushBoolean(true);
+    if (nResults > 0) {
+      ls.xmove(co, nResults);
+    }
+    return nResults + 1;
+  }
+
+  /// coroutine.resumeAsync(co [, val1, ...]) - Async counterpart of
+  /// [coroutine.resume]. Use this when the coroutine body calls host async
+  /// functions (registered via [LuaAuxLib.registerAsync]) directly without
+  /// the `await` keyword; the coroutine suspension point replaces `await`.
+  ///
+  /// Returns the same `(bool, ...)` tuple as [coroutine.resume].
+  static Future<int> _coResumeAsync(LuaState ls) async {
+    int nArgs = ls.getTop() - 1;
+    LuaState? co = ls.toThread(1);
+    if (co == null) {
+      ls.pushBoolean(false);
+      ls.pushString("thread expected");
+      return 2;
+    }
+
+    // Check for self-resume
+    if (co.runningId() == ls.runningId()) {
+      ls.pushBoolean(false);
+      ls.pushString("cannot resume non-suspended coroutine");
+      return 2;
+    }
+
+    if (co.getStatus() == ThreadStatus.luaDead) {
+      ls.pushBoolean(false);
+      ls.pushString("cannot resume dead coroutine");
+      return 2;
+    }
+
+    // Move arguments to coroutine
+    co.xmove(ls, nArgs);
+
+    try {
+      if (co.getStatus() == ThreadStatus.luaOk) {
+        await co.callAsync(nArgs, -1);
+      } else if (co.getStatus() == ThreadStatus.luaYield) {
+        co.setStatus(ThreadStatus.luaOk);
+        await co.resumeAsync(nArgs);
+      }
+    } catch (e, s) {
+      if (e is LuaYieldException) {
+        final n = e.nResults;
+        ls.pushBoolean(true);
+        ls.xmove(co, n);
+        co.popStackFrame();
+        return n + 1;
+      } else {
+        String msg = 'error: $e\n\n${s.toString()}\n\n${co.traceStack()}';
+        ls.pushBoolean(false);
+        ls.pushString(msg);
+        return 2;
+      }
+    }
+
+    // Coroutine completed successfully
+    co.setStatus(ThreadStatus.luaDead);
+
     int nResults = co.getTop();
     ls.pushBoolean(true);
     if (nResults > 0) {

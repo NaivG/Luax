@@ -44,7 +44,11 @@ class StatProcessor {
 
   static void processFuncCallStat(FuncInfo fi, FuncCallStat node) {
     int r = fi.allocReg();
-    ExpProcessor.processFuncCallExp(fi, node.exp, r, 0);
+    if (node.exp is AwaitExp) {
+      ExpProcessor.processAwaitExp(fi, node.exp as AwaitExp, r, 0);
+    } else {
+      ExpProcessor.processFuncCallExp(fi, node.exp as FuncCallExp, r, 0);
+    }
     fi.freeReg();
   }
 

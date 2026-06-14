@@ -282,6 +282,10 @@ class StatParser {
     Exp prefixExp = PrefixExpParser.parsePrefixExp(lexer);
     if (prefixExp is FuncCallExp) {
       return FuncCallStat(prefixExp);
+    } else if (prefixExp is AwaitExp) {
+      // `await func(args)` used as a statement — wrap in FuncCallStat so the
+      // codegen handles it through the same call-path as a regular call.
+      return FuncCallStat(prefixExp);
     } else {
       return parseAssignStat(lexer, prefixExp);
     }

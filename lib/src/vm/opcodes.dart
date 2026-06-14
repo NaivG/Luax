@@ -65,6 +65,7 @@ enum OpCodeKind {
   CLOSURE,
   VARARG,
   EXTRAARG,
+  ACALL,
 }
 
 class OpCode {
@@ -191,4 +192,13 @@ const opCodes = const <OpCode>[
       Instructions.vararg), // R(A), R(A+1), ..., R(A+B-2) = vararg
   OpCode(0, 0, OpArgMask.OpArgU, OpArgMask.OpArgU, OpMode.iAx, "EXTRAARG",
       null), // extra (larger) argument for previous opcode
+  OpCode(
+      0,
+      1,
+      OpArgMask.OpArgU,
+      OpArgMask.OpArgU,
+      OpMode.iABC,
+      "ACALL",
+      Instructions
+          .aCall), // await-aware call: like CALL but always routes through async dispatch
 ];

@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `await` keyword for host async function calls (`await <func>(...)`). `await` is a hard-reserved Luax keyword (not part of standard Lua) and is recognized in both expression and statement positions, including chained `await obj.method()` and nested `await f(await g(x))`. The VM emits a new `ACALL` opcode that suspends execution until the registered async Dart closure completes and returns the actual result.
+- `ACALL` opcode (`OpCodeKind.ACALL`, instruction number 47) — await-aware variant of `CALL`. The sync VM loop's `Instructions.aCall` raises a descriptive error if reached outside an async execution context, and the async VM loop routes the call through `_callTargetAsync(alwaysAwait: true)`.
+- `AwaitExp` AST node with codegen support in `processAwaitExp` / `funcinfo.emitAsyncCall`. `StatParser` accepts `await func(args)` as a statement (wrapped in `FuncCallStat`); the statement codegen dispatches on the inner `AwaitExp` to emit `ACALL` instead of `CALL`.
+- `coroutine.resumeAsync(co [, val1, ...])` — async counterpart of `coroutine.resume`. Required when a coroutine body calls host async functions without the `await` keyword: the surrounding `resumeAsync` call provides the suspension point, so direct calls to async-registered functions inside the coroutine body are awaited transparently. Mirrors `coroutine.resume` for yields, errors, and the `(bool, ...)` return tuple.
+- Optional `name` parameter on `pushDartFunctionAsync(f, [name])` and `pushDartClosureAsync(f, n, [name])`; `registerAsync` passes the registered name through automatically. The name is stored on the new `Closure.name` field and surfaced in the "attempt to call async function `<name>` without await or in non-async context" runtime error message.
+- `example/await_example.dart` — runnable example covering the three call modes (direct call returning the error tuple, explicit `await`, and coroutine body via `coroutine.resumeAsync`).
+
+### Changed
+
+- **Behavioural:** direct synchronous call to a host async Dart closure — either from Dart via `LuaState.call(...)` or from Lua via the `CALL` opcode — no longer throws. It now pushes a `(nil, "<message>")` tuple onto the stack where the message names the symbol that was called, allowing Lua scripts to branch on the error in the same way as pcall-style results. Statement calls (nResults == 0) silently drop the tuple; single-result calls keep only the leading `nil`. This is a breaking change for any caller that was catching the previous exception. Async paths (`pCallAsync`, `callAsync`, `doStringAsync`, `coroutine.resumeAsync`) are unaffected — they continue to await the closure directly.
+- `callAsync` is now a thin wrapper over `_callTargetAsync(alwaysAwait: true)`, eliminating the duplicated dispatch logic that previously lived in `callAsync`. The shared path also picks up the coroutine-aware await semantics (`_insideResumeAsync` flag) for free.
+- `resume` and `resumeAsync` share three private helpers — `_placeResumeArgs`, `_unwindAndPropagate`, `_popBodyFrame` — extracted from the original `resume` body. The async variant now sets an `_insideResumeAsync` flag for the duration of execution so `_callTargetAsync` knows to await host async closures encountered mid-frame.
+- `Closure.DartFuncAsync` constructor signature now takes a leading `String? name` argument. The change is contained within the library: `pushDartFunctionAsync` / `pushDartClosureAsync` are the only callers and both were updated. Direct external construction will need to be updated.
+
+### Fixed
+
+- `coroutine.resume` and `coroutine.resumeAsync` now recognize `ACALL` as a valid resume point when placing resume arguments into the interrupted call's result slots (`_placeResumeArgs`). Previously the guard only matched `CALL` and `TAILCALL`, so a `coroutine.yield` inside a Lua function reached via `await` would drop the resume arguments on the floor. The change covers the new `ACALL` opcode alongside the two original cases.
+
+### Tests
+
+- New `await keyword` test group (`test/async/async_function_test.dart`) covering basic await, multiple return values, nested awaits, `await` on a sync host function (no-op), `await` as a statement, and `await` on a method call (table field).
+- New `Direct async call returns error tuple` test group covering the new `(nil, error)` semantics for `doStringAsync` calls, single-result truncation, and statement-call discarding.
+- New `coroutine resume after await-call` regression group (two tests) covering `_placeResumeArgs` correctness when the interrupted call is an `ACALL` — both the implicit (coroutine body) and explicit (`await` keyword) await paths.
+- Three new `coroutine.resumeAsync` tests in `test/coroutine/coroutine_test.dart`: host async function called from a coroutine body, yielded values propagated to the caller, and error propagation as `(false, msg)`.
+- Existing async integration tests updated to use the `await` keyword now that it is the supported way to invoke host async functions from Lua.
+
 ## [0.3.1] - 2026-06-13
 
 ### Added

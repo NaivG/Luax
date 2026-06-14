@@ -143,9 +143,13 @@ void main() {
 
 包装函数的签名为 `int Function(LuaState ls)`，返回值表示推入 Lua 栈的值数量。
 
-### 异步 Dart 函数
+### 异步函数调用
 
-从 Lua 调用异步 Dart 代码 — 适用于 HTTP 请求、文件 I/O、数据库查询等场景。
+Luax 支持 Dart 与 Lua 之间的双向异步函数调用。
+
+#### Dart 异步 API
+
+从 Dart 异步调用函数（包括 Dart 函数和 Lua 函数）。
 
 ```dart
 Future<int> fetchData(LuaState ls) async {
@@ -165,7 +169,7 @@ void main() async {
   // 注册异步函数为全局变量
   state.registerAsync('fetchData', fetchData);
 
-  // 从 Dart 调用
+  // 使用 callAsync 从 Dart 调用
   state.getGlobal('fetchData');
   state.pushString('https://api.example.com');
   await state.callAsync(1, 1);
@@ -173,7 +177,42 @@ void main() async {
 }
 ```
 
-**异步 API 参考：**
+#### Lua 调用异步函数
+
+> [!important]
+> `await` 关键字是 Luax **0.3.1 之后**版本中的自定义关键字，并非 Lua 语言的标准组成部分。
+> 
+> 如果您使用的是较旧版本的 Luax，只需使用与同步函数相同的语法即可。
+
+当 Lua 代码调用异步注册的 Dart 函数时，必须使用 `await` 关键字或在协程内运行（通过 `coroutine.create` 和 `coroutine.resumeAsync`）。适用于 HTTP 请求、文件 I/O、数据库查询等由 Dart 驱动的异步操作场景。
+
+```lua
+-- `await` 是 Luax 中的保留关键字
+local result = await fetchData("https://api.example.com")
+print(result)
+
+-- 嵌套 await
+local a = await fetchData("url1")
+local b = await fetchData("url2")
+
+-- 协程
+local co = coroutine.create(function()
+  local a = fetchData("url1")
+end)
+coroutine.resumeAsync(co)
+```
+
+> **注意：** `await` 只能出现在函数调用表达式之前。将其用作变量名或其他标识符位置会导致语法错误。
+
+如果在 Lua 中调用异步函数时未使用 `await` 或不在协程上下文中，调用将出错并返回 `(nil, error_string)` 元组：
+
+```lua
+local r, err = asyncFunc()
+-- r   = nil
+-- err = "attempt to call async function `asyncFunc` without await or in non-async context"
+```
+
+#### 异步 API 参考
 
 | 方法 | 说明 |
 |------|------|
