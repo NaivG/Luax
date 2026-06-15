@@ -356,7 +356,23 @@ collectgarbage("collect")
 
 ## Flutter 集成
 
-关于如何将 Luax 集成到带有 Riverpod 状态管理的 Flutter 应用中，请参阅 [Flutter Lua 示例](https://github.com/ImL1s/flutter_lua_example)。
+Luax 提供了一个 Flutter Widget 绑定包 [`flutter_luax`](https://github.com/NaivG/flutter_luax)，允许 Lua 脚本直接构造 `Scaffold`、`AppBar`、`Container`、`ElevatedButton`、`ListView`等组件。
+
+该包同时内置了 `LuaxScriptLoader`，可以从 URL 或 Flutter 资源包中
+加载 `.lua` 脚本，适合需要在不发版的情况下热更新 UI 的场景。
+
+```yaml
+dependencies:
+  luax:
+    git: https://github.com/NaivG/Luax.git
+  flutter_luax:
+    git: https://github.com/NaivG/flutter_luax.git
+```
+
+完整的 Widget 列表和使用示例请参阅 [flutter_luax README](https://github.com/NaivG/flutter_luax/README.md)。
+
+一个使用 Riverpod 状态管理的完整集成示例也可以在
+[flutter_lua_example](https://github.com/ImL1s/flutter_lua_example) 查看。
 
 ### 架构
 

@@ -358,7 +358,23 @@ Significant performance improvements over the upstream LuaDardo Plus v0.3.0:
 
 ## Flutter Integration
 
-For a full example of integrating Luax into a Flutter application with Riverpod state management, see the [Flutter Lua Example](https://github.com/ImL1s/flutter_lua_example).
+For Flutter apps, Luax provides a companion widget bindings package, [`flutter_luax`](https://github.com/NaivG/flutter_luax), which lets Lua scripts construct widgets like `Scaffold`, `AppBar`, `Container`, `ElevatedButton`, `ListView`, and more.
+
+It also includes a `LuaxScriptLoader` for fetching `.lua` files from a URL or Flutter asset bundle — useful when you want to push UI updates without rebuilding the app.
+
+```yaml
+dependencies:
+  luax:
+    git: https://github.com/NaivG/Luax.git
+  flutter_luax:
+    git: https://github.com/NaivG/flutter_luax.git
+```
+
+See the [flutter_luax README](https://github.com/NaivG/flutter_luax/README.md) for the full widget list
+and usage examples. 
+
+A complete integration example with Riverpod state
+management is also available at [flutter_lua_example](https://github.com/ImL1s/flutter_lua_example).
 
 ### Architecture
 
