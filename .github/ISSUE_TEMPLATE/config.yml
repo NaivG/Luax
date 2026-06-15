@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Luax Discussions
+    url: https://github.com/NaivG/Luax/discussions
+    about: Use Discussions for questions, ideas, and design conversations that are not actionable bug reports or feature requests.
+  - name: Existing issues
+    url: https://github.com/NaivG/Luax/issues
+    about: Search open and closed issues before filing a new one.

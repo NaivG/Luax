@@ -1,0 +1,88 @@
+name: Feature Request
+description: Propose a new API, opcode, stdlib function, or behavior change in Luax.
+title: "[Feature]: "
+labels: ["enhancement"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the problem you've hit first, then the proposed solution. If you 
+        are willing to send a PR, tick the box at the bottom — see CONTRIBUTING.md
+        for the branch / commit-message conventions.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What limitation or missing capability motivates this request? Link to the Lua 5.3 manual section or an existing issue if relevant.
+      placeholder: |
+        Luax currently does not expose `string.pack`/`string.unpack` natively,
+        so consumers must hand-roll byte packing. Upstream Lua 5.3 has
+        `string.pack("<i4", 42)` returning a 4-byte little-endian string.
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: How should Luax expose this? Describe the API shape and any VM / compiler changes at a high level.
+      placeholder: |
+        Implement `string.pack` and `string.unpack` as part of the standard
+        string library in `lib/src/stdlib/`. They should follow the Lua 5.3
+        manual §6.4.2.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other approaches you weighed, and why this one is preferred. Optional but encouraged.
+    validations:
+      required: false
+
+  - type: textarea
+    id: lua-example
+    attributes:
+      label: Lua example of the desired API
+      description: |
+        Show the Lua code that should work after this feature lands.
+        Fenced ```lua block, please.
+      placeholder: |
+        ```lua
+        local buf = string.pack("<i4", 42)
+        local n   = string.unpack("<i4", buf)
+        assert(n == 42)
+        ```
+    validations:
+      required: true
+
+  - type: textarea
+    id: dart-impact
+    attributes:
+      label: Dart-side impact
+      description: Does this require new bindings in `lib/lua.dart`, async interop, or platform-layer changes? Optional.
+    validations:
+      required: false
+
+  - type: input
+    id: version-target
+    attributes:
+      label: Target version
+      description: Suggested SemVer bump per CONTRIBUTING.md.
+      placeholder: "0.4.0 (MINOR — new feature, backward compatible)"
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: pr-willing
+    attributes:
+      label: Implementation
+      description: Let maintainers know how to route this issue.
+      options:
+        - label: I am willing to submit a PR for this (branch off `develop`, follow `CONTRIBUTING.md`).
+          required: false
+        - label: I have read `CONTRIBUTING.md` (branch naming, commit types, tests required).
+          required: true

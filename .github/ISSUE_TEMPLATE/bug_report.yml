@@ -1,0 +1,144 @@
+name: Bug Report
+description: Report incorrect behavior, crashes, or deviations from Lua 5.3 in Luax.
+title: "[Bug]: "
+labels: ["bug"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug. Please fill in every section below.
+        A minimal reproduction is **required** — issues without one will be closed.
+
+  - type: input
+    id: luax-version
+    attributes:
+      label: Luax version
+      description: Version from `pubspec.yaml`, or branch you use. (e.g. `0.3.1`/`main`)
+      placeholder: "0.3.1"
+    validations:
+      required: true
+
+  - type: input
+    id: dart-version
+    attributes:
+      label: Dart SDK version
+      description: Output of `dart --version`.
+      placeholder: "Dart SDK version: 3.5.0 (stable)"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      description: Where Luax is running. Luax supports both native Dart and the web target.
+      options:
+        - Linux (dart)
+        - macOS (dart)
+        - Windows (dart)
+        - Android (dart)
+        - iOS (dart)
+        - Web (dart2js / dart2wasm)
+        - Other (specify in description)
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What Luax actually did. Paste the exact error message or output.
+      placeholder: |
+        Crash with: RuntimeError: attempt to index a nil value (local 'x')
+        at line 4 of the Lua snippet below.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should have happened, per the Lua 5.3 manual or documented Luax behavior.
+      placeholder: |
+        Per Lua 5.3 §3.3.5, `string.gsub` returns the modified string and the
+        count of substitutions. The function should not raise.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Exact commands or actions. Number them if there are multiple.
+      placeholder: |
+        1. Create a fresh `dart pub get` checkout of Luax at the version above.
+        2. Save the snippets from the next two sections into `repro/example.dart` and `repro/script.lua`.
+        3. Run `dart run repro/example.dart`.
+    validations:
+      required: true
+
+  - type: textarea
+    id: dart-repro
+    attributes:
+      label: Dart driver (required)
+      description: |
+        The Dart code that loads and runs the Lua snippet.
+        Use the standard pattern: `LuaState.newState()` -> `openLibs()` -> `loadString` / `loadFile` -> `call`.
+        Fenced ```dart block, please.
+      placeholder: |
+        ```dart
+        import 'package:luax/lua.dart';
+
+        void main() {
+          final state = LuaState.newState();
+          state.openLibs();
+          state.doString(r'''
+            -- Lua snippet from the next field
+          ''');
+        }
+        ```
+    validations:
+      required: true
+
+  - type: textarea
+    id: lua-repro
+    attributes:
+      label: Lua snippet (required)
+      description: |
+        The minimal Lua code that triggers the bug.
+        Strip everything that is not required to reproduce.
+        Fenced ```lua block, please.
+      placeholder: |
+        ```lua
+        local t = {1, 2, 3}
+        for i, v in ipairs(t) do
+          if v == 2 then
+            t[#t + 1] = 4
+          end
+          print(i, v)
+        end
+        ```
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Stack trace / logs
+      description: Paste the full stack trace or `dart run` output verbatim. Use a ```text block.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: search
+    attributes:
+      label: Search confirmation
+      description: Please confirm both of the following before filing.
+      options:
+        - label: I'm using the latest version of Luax.
+          required: true
+        - label: I have searched the existing issues and this has not been reported.
+          required: true
+        - label: I have searched the closed issues and confirmed this is not a duplicate of a fixed bug.
+          required: true
