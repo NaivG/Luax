@@ -2103,8 +2103,7 @@ class LuaStateImpl with GCObject implements LuaState, LuaVM {
   @override
   void loadVararg(int n) {
     // use empty object if varargs in stack is null
-    List<Object?>? varargs =
-        _stack!.varargs ?? const <Object>[];
+    List<Object?>? varargs = _stack!.varargs ?? const <Object>[];
     if (n < 0) {
       n = varargs.length;
     }
