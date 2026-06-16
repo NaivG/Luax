@@ -15,7 +15,7 @@ import '../stdlib/string_lib.dart';
 import '../stdlib/table_lib.dart';
 import '../stdlib/coroutine_lib.dart';
 import '../stdlib/utf8_lib.dart';
-import 'package:sprintf/sprintf.dart';
+import 'package:dart_sprintf/sprintf.dart';
 
 import '../number/lua_number.dart';
 import '../stdlib/basic_lib.dart';
@@ -144,13 +144,13 @@ class LuaStateImpl with GCObject implements LuaState, LuaVM {
 
   /// 压入调用栈帧
   void _pushLuaStack(LuaStack newTop) {
-    newTop.prev = this._stack;
-    this._stack = newTop;
+    newTop.prev = _stack;
+    _stack = newTop;
   }
 
   void _popLuaStack() {
-    LuaStack top = this._stack!;
-    this._stack = top.prev;
+    LuaStack top = _stack!;
+    _stack = top.prev;
     top.prev = null;
   }
 
@@ -205,14 +205,13 @@ class LuaStateImpl with GCObject implements LuaState, LuaVM {
 
   Object? _getMetafield(Object? val, String fieldName) {
     LuaTable? mt = _getMetatable(val);
-    return mt != null ? mt.get(fieldName) : null;
+    return mt?.get(fieldName);
   }
 
   Object? getMetamethod(Object? a, Object? b, String mmName) {
     Object? mm = _getMetafield(a, mmName);
-    if (mm == null) {
-      mm = _getMetafield(b, mmName);
-    }
+    // if metamethod is not found, try the other operand
+    mm ??= _getMetafield(b, mmName);
     return mm;
   }
 
@@ -386,7 +385,7 @@ class LuaStateImpl with GCObject implements LuaState, LuaVM {
   @override
   int toInteger(int idx) {
     int? i = toIntegerX(idx);
-    return i == null ? 0 : i;
+    return i ?? 0;
   }
 
   @override
@@ -410,7 +409,7 @@ class LuaStateImpl with GCObject implements LuaState, LuaVM {
   @override
   double toNumber(int idx) {
     double? n = toNumberX(idx);
-    return n == null ? 0 : n;
+    return n ?? 0;
   }
 
   @override
@@ -1391,7 +1390,7 @@ class LuaStateImpl with GCObject implements LuaState, LuaVM {
         : Compiler.compile(utf8.decode(chunk), chunkName);
     Closure closure = Closure(proto);
     _stack!.push(closure);
-    if (proto.upvalues.length > 0) {
+    if (proto.upvalues.isNotEmpty) {
       Object? env = registry!.get(luaRidxGlobals);
       closure.upvals[0] = UpvalueHolder.value(env); // todo
     }
@@ -1671,7 +1670,7 @@ class LuaStateImpl with GCObject implements LuaState, LuaVM {
     } else {
       typeArg = typeName2(arg); /* standard name */
     }
-    String msg = tname + " expected, got " + typeArg!;
+    String msg = "$tname expected, got ${typeArg!}";
     pushString(msg);
     argError(arg, msg);
   }
@@ -1819,7 +1818,7 @@ class LuaStateImpl with GCObject implements LuaState, LuaVM {
       if (bytes == null) {
         return ThreadStatus.luaErrFile;
       }
-      return load(bytes, "@" + filename, mode);
+      return load(bytes, "@$filename", mode);
     } catch (e, s) {
       // ignore: avoid_print
       print(e);
@@ -2022,9 +2021,10 @@ class LuaStateImpl with GCObject implements LuaState, LuaVM {
       /* any free element? */
       rawGetI(t, _ref); /* remove it from list */
       rawSetI(t, 0); /* (t[freelist] = t[ref]) */
-    } else
+    } else {
       /* no free elements */
       _ref = rawLen(t) + 1;
+    }
     /* get a new reference */
 
     rawSetI(t, _ref);
@@ -2086,7 +2086,7 @@ class LuaStateImpl with GCObject implements LuaState, LuaVM {
       int? uvIdx = uvInfo.idx;
       if (uvInfo.instack == 1) {
         if (_stack!.openuvs == null) {
-          _stack!.openuvs = Map<int?, UpvalueHolder?>();
+          _stack!.openuvs = <int?, UpvalueHolder?>{};
         }
         if (_stack!.openuvs!.containsKey(uvIdx)) {
           closure.upvals[i] = _stack!.openuvs![uvIdx];
@@ -2102,10 +2102,11 @@ class LuaStateImpl with GCObject implements LuaState, LuaVM {
 
   @override
   void loadVararg(int n) {
+    // use empty object if varargs in stack is null
     List<Object?>? varargs =
-        _stack!.varargs != null ? _stack!.varargs : const <Object>[];
+        _stack!.varargs ?? const <Object>[];
     if (n < 0) {
-      n = varargs!.length;
+      n = varargs.length;
     }
 
     //stack.check(n)
@@ -2124,8 +2125,9 @@ class LuaStateImpl with GCObject implements LuaState, LuaVM {
         if (v!.index! >= a - 1) {
           v.migrate();
           return true;
-        } else
+        } else {
           return false;
+        }
       });
     }
   }

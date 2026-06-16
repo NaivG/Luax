@@ -1,5 +1,4 @@
 import 'package:luax/lua.dart';
-import 'package:luax/src/platform/platform.dart';
 import 'package:test/test.dart';
 
 void main() {

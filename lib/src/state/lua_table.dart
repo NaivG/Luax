@@ -104,9 +104,7 @@ class LuaTable with GCObject {
     if (key is int) {
       int idx = key;
       if (idx >= 1) {
-        if (arr == null) {
-          arr = <Object?>[];
-        }
+        arr ??= <Object?>[];
 
         int arrLen = arr!.length;
         if (idx <= arrLen) {
@@ -130,9 +128,7 @@ class LuaTable with GCObject {
     }
 
     if (val != null) {
-      if (map == null) {
-        map = HashMap<Object?, Object>();
-      }
+      map ??= HashMap<Object?, Object>();
       map![key] = val;
     } else {
       if (map != null) {

@@ -68,9 +68,9 @@ class FuncInfo {
   int maxRegs = 0;
   int scopeLv = 0;
   List<LocVarInfo> locVars = <LocVarInfo>[];
-  Map<String?, LocVarInfo?> locNames = Map<String?, LocVarInfo?>();
-  Map<String?, UpvalInfo> upvalues = Map<String?, UpvalInfo>();
-  Map<Object?, int> constants = Map<Object?, int>();
+  Map<String?, LocVarInfo?> locNames = <String?, LocVarInfo?>{};
+  Map<String?, UpvalInfo> upvalues = <String?, UpvalInfo>{};
+  Map<Object?, int> constants = <Object?, int>{};
   List<List<int>?> breaks = <List<int>?>[];
   Map<String, LabelInfo> labels = {};
   List<GotoInfo> pendingGotos = [];

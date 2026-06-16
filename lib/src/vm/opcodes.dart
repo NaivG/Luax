@@ -1,3 +1,5 @@
+// ignore_for_file: constant_identifier_names
+
 import '../api/lua_vm.dart';
 import 'instructions.dart';
 
@@ -82,7 +84,7 @@ class OpCode {
 }
 
 /// Instruction List
-const opCodes = const <OpCode>[
+const opCodes = <OpCode>[
   /*     T  A    B       C     mode         name    */
   OpCode(0, 1, OpArgMask.OpArgR, OpArgMask.OpArgN, OpMode.iABC, "MOVE",
       Instructions.move), // R(A) := R(B)

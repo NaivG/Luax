@@ -12,3 +12,6 @@ build/
 
 # Test coverage
 test/module/coverage/
+
+# others
+.github/

@@ -1,6 +1,5 @@
 import 'package:glados/glados.dart';
 import 'package:luax/lua.dart';
-import 'package:test/test.dart';
 
 /// Generates valid Lua pattern strings for property-based testing.
 ///

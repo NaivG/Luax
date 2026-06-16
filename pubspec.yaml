@@ -10,9 +10,9 @@ environment:
   sdk: '>=3.0.0 <4.0.0'
 
 dependencies:
-  sprintf:
+  dart_sprintf:
     git:
-      url: https://github.com/Telosnex/dart-sprintf.git
+      url: https://github.com/NaivG/dart-sprintf.git
       ref: master
 
 dev_dependencies:

@@ -212,13 +212,13 @@ class MathLib {
 
   static int _fmod(LuaState ls) {
     if (ls.isInteger(1) && ls.isInteger(2)) {
-      var d = ls.toInteger(2)!;
+      var d = ls.toInteger(2);
       if (d == 0) {
         ls.argCheck(false, 2, "zero");
         return 0;
       }
       // math.fmod uses truncation remainder, not floor remainder.
-      ls.pushInteger(ls.toInteger(1)!.remainder(d));
+      ls.pushInteger(ls.toInteger(1).remainder(d));
     } else {
       var x = ls.checkNumber(1)!;
       var y = ls.checkNumber(2)!;

@@ -18,7 +18,7 @@ class BlockParser {
     List<Stat> stats = <Stat>[];
     while (!_isReturnOrBlockEnd(lexer.LookAhead())) {
       Stat stat = StatParser.parseStat(lexer);
-      if (!(stat is EmptyStat)) {
+      if (stat is! EmptyStat) {
         stats.add(stat);
       }
     }

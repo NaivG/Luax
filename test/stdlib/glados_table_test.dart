@@ -1,6 +1,5 @@
 import 'package:glados/glados.dart';
 import 'package:luax/lua.dart';
-import 'package:test/test.dart';
 
 List<String?>? _run(String code, int n) {
   try {

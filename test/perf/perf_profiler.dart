@@ -54,6 +54,8 @@ class PerfProfiler {
       await _service!.setFlag('profiler', 'true');
 
       // Get our own isolate ID.
+      // For perf testing only. This will not happen in the library.
+      // ignore: sdk_version_since
       _isolateId = developer.Service.getIsolateId(isolate.Isolate.current);
       if (_isolateId == null) {
         print('[PerfProfiler] Could not determine isolate ID.');

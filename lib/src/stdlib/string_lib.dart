@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:sprintf/sprintf.dart';
+import 'package:dart_sprintf/sprintf.dart';
 
 import '../api/lua_state.dart';
 import '../api/lua_type.dart';
