@@ -13,3 +13,5 @@ pubspec.lock
 .vscode/
 
 .DS_Store
+
+flutter_luax/
