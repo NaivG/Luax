@@ -509,8 +509,7 @@ void main() {
       expect(ls.toBoolean(-1), isTrue);
     });
 
-    test('parent emit fires coroutine-registered listener across yields',
-        () {
+    test('parent emit fires coroutine-registered listener across yields', () {
       final ls = LuaState.newState();
       ls.openLibs();
 
@@ -532,7 +531,8 @@ void main() {
       expect(ls.toInteger(-1), equals(3));
     });
 
-    test('coroutine off by id does not remove listener from a different '
+    test(
+        'coroutine off by id does not remove listener from a different '
         'thread that happens to have the same id (defense in depth)', () {
       // Each thread has its own id, and listeners are tagged with the
       // registering thread's id (ownerId).  So even with a shared bus,

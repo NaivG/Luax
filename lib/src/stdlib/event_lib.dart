@@ -68,9 +68,7 @@ class EventLib {
       // silent no-op.
       final id = ls.checkInteger(2)!;
       final entry = impl.findEntryById(id);
-      if (entry != null &&
-          entry.isLua &&
-          entry.ownerId == impl.id) {
+      if (entry != null && entry.isLua && entry.ownerId == impl.id) {
         impl.offById(id);
       }
     } else if (ls.type(2) == LuaType.luaFunction) {
@@ -105,8 +103,8 @@ class EventLib {
     final ref = _refLuaFunction(ls, 2, name);
 
     final impl = ls as LuaStateImpl;
-    final id = impl.eventBus.addLuaListener(name, ref,
-        ownerId: impl.id, once: true);
+    final id =
+        impl.eventBus.addLuaListener(name, ref, ownerId: impl.id, once: true);
 
     ls.pushInteger(id);
     return 1;

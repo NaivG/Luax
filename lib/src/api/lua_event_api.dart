@@ -5,7 +5,7 @@ import '../event/event_bus.dart';
 /// Implemented by `LuaStateImpl` so that host (Dart) code can register,
 /// trigger, and remove event listeners that are visible to both Dart and
 /// Lua sides.
-/// 
+///
 /// Note that this is not a standard Lua API. But Lua can implement a similar
 /// API using the table-based event system. Implement here for convenience.
 abstract class LuaEventAPI {
@@ -43,8 +43,8 @@ abstract class LuaEventAPI {
   ///
   /// [args] are passed to each listener.  Only Dart-primitive types
   /// (`null`, `bool`, `int`, `double`, `String`) are automatically converted
-  /// to Lua stack values when calling Lua listeners. 
-  /// 
+  /// to Lua stack values when calling Lua listeners.
+  ///
   /// Normally, listeners must not mutate args. This will affect subsequent listeners.
   void emit(String event, [List<dynamic> args = const []]);
 
@@ -56,7 +56,7 @@ abstract class LuaEventAPI {
 
   /// Remove all listeners for [event], or all listeners for all events if
   /// [event] is `null`.
-  /// 
+  ///
   /// **WARNING: Removing all listeners is a dangerous operation. Use at your own risk.**
   void removeAllListeners([String? event]);
 }
