@@ -8,6 +8,8 @@ import '../gc/garbage_collector.dart';
 import '../gc/gc_constants.dart';
 import '../gc/gc_object.dart';
 import '../platform/platform.dart';
+import '../event/event_bus.dart';
+import '../stdlib/event_lib.dart';
 
 import '../stdlib/math_lib.dart';
 import '../stdlib/package_lib.dart';
@@ -88,6 +90,31 @@ class LuaStateImpl with GCObject implements LuaState, LuaVM {
   /// Debug hook list
   final List<HookContext> hookList = [];
 
+  /// Event bus for bidirectional Dart ↔ Lua event notifications.
+  ///
+  /// All Lua threads (coroutines) that share a [registry] also share a
+  /// single [EventBus], so listeners registered from one thread are
+  /// visible to `emit` calls on any other thread. The bus is stored inside
+  /// the registry table using [_eventBusRegistryKey] as a sentinel key.
+  late final EventBus _eventBus;
+
+  /// Public accessor for the event bus (used by [EventLib]).
+  EventBus get eventBus => _eventBus;
+
+  /// Dart-internal sentinel key for storing the [EventBus] inside the
+  /// shared [registry] table.  Never exposed to Lua.
+  static final Object _eventBusRegistryKey = Object();
+
+  /// Resolve the shared [EventBus] from the [registry], creating one if
+  /// this is the first thread for the registry like lazy initialization.
+  EventBus _resolveEventBus() {
+    final existing = registry!.get(_eventBusRegistryKey);
+    if (existing is EventBus) return existing;
+    final bus = EventBus();
+    registry!.put(_eventBusRegistryKey, bus);
+    return bus;
+  }
+
   /// Unique thread ID
   int id = 0;
 
@@ -116,6 +143,9 @@ class LuaStateImpl with GCObject implements LuaState, LuaVM {
 
     // Register this thread itself as a GC object.
     _gc.register(this);
+
+    // Initialise (or reuse) the shared event bus for this registry.
+    _eventBus = _resolveEventBus();
   }
 
   /// Constructor for creating a new thread (coroutine) that shares the registry
@@ -134,6 +164,9 @@ class LuaStateImpl with GCObject implements LuaState, LuaVM {
     _updateThreadCache(id);
 
     _gc.register(this);
+
+    // Reuse the parent thread's event bus (stored in the shared registry).
+    _eventBus = _resolveEventBus();
   }
 
   /// Updates the thread cache with this thread
@@ -1855,6 +1888,7 @@ class LuaStateImpl with GCObject implements LuaState, LuaVM {
       "os": OSLib.openOSLib,
       "coroutine": CoroutineLib.openCoroutineLib,
       "utf8": Utf8Lib.openUtf8Lib,
+      "event": EventLib.openEventLib,
     };
 
     libs.forEach((name, fun) {
@@ -2431,6 +2465,218 @@ class LuaStateImpl with GCObject implements LuaState, LuaVM {
       }
 
       s = s.prev;
+    }
+  }
+
+  // ==============================================================
+  // Event API implementation (LuaEventAPI)
+  // ==============================================================
+
+  @override
+  int on(String event, EventCallback callback) {
+    return _eventBus.addDartListener(event, callback, ownerId: id);
+  }
+
+  @override
+  int onAsync(String event, EventCallbackAsync callback) {
+    return _eventBus.addDartListenerAsync(event, callback, ownerId: id);
+  }
+
+  @override
+  int once(String event, EventCallback callback) {
+    return _eventBus.addDartListener(event, callback, ownerId: id, once: true);
+  }
+
+  @override
+  void off(String event,
+      {EventCallback? callback,
+      EventCallbackAsync? asyncCallback,
+      int? listenerId}) {
+    if (listenerId != null) {
+      offById(listenerId);
+    } else if (callback != null) {
+      _eventBus.removeDartListener(event, callback);
+    } else if (asyncCallback != null) {
+      _eventBus.removeDartListenerAsync(event, asyncCallback);
+    }
+  }
+
+  @override
+  void offById(int listenerId) {
+    final entry = findEntryById(listenerId);
+    if (entry != null) {
+      _releaseEntry(entry);
+    }
+  }
+
+  @override
+  void emit(String event, [List<dynamic> args = const []]) {
+    emitSyncInternal(event, args);
+  }
+
+  @override
+  Future<void> emitAsync(String event, [List<dynamic> args = const []]) {
+    return emitAsyncInternal(event, args);
+  }
+
+  @override
+  void removeAllListeners([String? event]) {
+    final removedRefs = _eventBus.removeAllListeners(event);
+    for (final ref in removedRefs) {
+      unRef(luaRegistryIndex, ref);
+    }
+    // Clean the fn-map so a later event.off(name, fn) won't find a
+    // stale ref that has already been released (double-unref).
+    _cleanFnMap(event);
+  }
+
+  /// Nil out the fn-map entry for [event], or the entire fn-map if [event] is null.
+  void _cleanFnMap(String? event) {
+    getField(luaRegistryIndex, EventLib.fnMapKey);
+    if (isNil(-1)) {
+      pop(1);
+      return;
+    }
+    if (event != null) {
+      pushString(event);
+      pushNil();
+      setTable(-3); // fnMap[event] = nil
+    } else {
+      pushNil();
+      setField(luaRegistryIndex, EventLib.fnMapKey); // registry[fnMapKey] = nil
+    }
+    pop(1); // fnMap
+  }
+
+  // ------------------------------------------------------------------
+  // Internal dispatch helpers (called from EventLib and from emit/emitAsync)
+  // ------------------------------------------------------------------
+
+  /// Synchronous event dispatch — fires all listeners for [event].
+  void emitSyncInternal(String event, List<dynamic> args) {
+    final listeners = _eventBus.getListeners(event);
+    for (final entry in listeners) {
+      var invoked = false;
+      if (entry.isLua) {
+        _fireLuaListenerSync(entry, args);
+        invoked = true;
+      } else if (entry.dartCallback != null) {
+        try {
+          entry.dartCallback!(args);
+        } catch (e) {
+          print('event error (Dart listener for "$event"): $e');
+        }
+        invoked = true;
+      }
+      // Async Dart listeners are skipped in sync emit.
+      if (invoked && entry.once) {
+        _releaseEntry(entry);
+      }
+    }
+  }
+
+  /// Asynchronous event dispatch — fires and awaits all listeners.
+  Future<void> emitAsyncInternal(String event, List<dynamic> args) async {
+    final listeners = _eventBus.getListeners(event);
+    for (final entry in listeners) {
+      var invoked = false;
+      if (entry.isLua) {
+        await _fireLuaListenerAsync(entry, args);
+        invoked = true;
+      } else if (entry.dartCallbackAsync != null) {
+        try {
+          await entry.dartCallbackAsync!(args);
+        } catch (e) {
+          print('event error (async Dart listener for "$event"): $e');
+        }
+        invoked = true;
+      } else if (entry.dartCallback != null) {
+        try {
+          entry.dartCallback!(args);
+        } catch (e) {
+          print('event error (Dart listener for "$event"): $e');
+        }
+        invoked = true;
+      }
+      if (invoked && entry.once) {
+        _releaseEntry(entry);
+      }
+    }
+  }
+
+  /// Fire a single Lua listener synchronously via pCall.
+  void _fireLuaListenerSync(ListenerEntry entry, List<dynamic> args) {
+    rawGetI(luaRegistryIndex, entry.luaRef!);
+    for (final arg in args) {
+      _pushDartValue(arg);
+    }
+    final status = pCall(args.length, 0, 0);
+    if (status != ThreadStatus.luaOk) {
+      // Error message is on the stack; pop it.
+      final errMsg = type(-1) == LuaType.luaString ? toStr(-1) : '?';
+      pop(1);
+      print('event error (Lua listener): $errMsg');
+    }
+  }
+
+  /// Fire a single Lua listener asynchronously via pCallAsync.
+  Future<void> _fireLuaListenerAsync(
+      ListenerEntry entry, List<dynamic> args) async {
+    rawGetI(luaRegistryIndex, entry.luaRef!);
+    for (final arg in args) {
+      _pushDartValue(arg);
+    }
+    final status = await pCallAsync(args.length, 0, 0);
+    if (status != ThreadStatus.luaOk) {
+      final errMsg = type(-1) == LuaType.luaString ? toStr(-1) : '?';
+      pop(1);
+      print('event error (Lua listener): $errMsg');
+    }
+  }
+
+  /// Remove a listener entry from the bus and release its Lua ref/fn-map
+  /// mapping if applicable.
+  ///
+  /// Returns `true` when the entry was still in the bus (i.e. this call
+  /// actually removed it), `false` when the entry had already been removed
+  /// by an earlier `off`, `offById`, or `removeAllListeners`.  The `false`
+  /// case skips `unRef` and fn-map cleanup, preventing double-release of
+  /// the registry ref.
+  bool _releaseEntry(ListenerEntry entry) {
+    final removed = _eventBus.removeById(entry.id);
+    if (removed && entry.isLua && entry.luaRef != null) {
+      unRef(luaRegistryIndex, entry.luaRef!);
+      EventLib.removeFnMapEntryByRef(this, entry.event, entry.luaRef!);
+    }
+    return removed;
+  }
+
+  /// Find an entry by id across all events.
+  ListenerEntry? findEntryById(int id) {
+    // Iterate through all events to find the entry.
+    // This is O(n) but only used by offById which is infrequent.
+    for (final event in _eventBus.eventNames) {
+      for (final entry in _eventBus.getListeners(event)) {
+        if (entry.id == id) return entry;
+      }
+    }
+    return null;
+  }
+
+  /// Push a Dart value onto the Lua stack.
+  void _pushDartValue(Object? val) {
+    if (val == null) {
+      pushNil();
+    } else if (val is bool) {
+      pushBoolean(val);
+    } else if (val is int) {
+      pushInteger(val);
+    } else if (val is double) {
+      pushNumber(val);
+    } else if (val is String) {
+      pushString(val);
+    } else {
+      pushString(val.toString());
     }
   }
 

@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `coroutine.resumeAsync(co [, val1, ...])` — async counterpart of `coroutine.resume`. Required when a coroutine body calls host async functions without the `await` keyword: the surrounding `resumeAsync` call provides the suspension point, so direct calls to async-registered functions inside the coroutine body are awaited transparently. Mirrors `coroutine.resume` for yields, errors, and the `(bool, ...)` return tuple.
 - Optional `name` parameter on `pushDartFunctionAsync(f, [name])` and `pushDartClosureAsync(f, n, [name])`; `registerAsync` passes the registered name through automatically. The name is stored on the new `Closure.name` field and surfaced in the "attempt to call async function `<name>` without await or in non-async context" runtime error message.
 - `example/await_example.dart` — runnable example covering the three call modes (direct call returning the error tuple, explicit `await`, and coroutine body via `coroutine.resumeAsync`).
+- Bidirectional **Event system** (`EventBus`, `LuaEventAPI`, `EventLib`) bridging Dart and Lua callbacks on a shared event bus. Dart-side API: `on`, `onAsync`, `once`, `off`, `offById`, `emit`, `emitAsync`, `removeAllListeners`. Lua-side `event` library: `event.on`, `event.once`, `event.off`, `event.emit`, `event.emitAsync`. Listeners from both sides are stored in a unified `EventBus` keyed by event name; dispatch logic lives in `LuaStateImpl`. Security sandbox: Lua can only remove its own listeners; `removeAllListeners` is Dart-only.
+- `EventCallback` and `EventCallbackAsync` typedefs exported from `lua.dart` for external use.
+- `LuaState` now implements `LuaEventAPI`, making the event API part of the public interface.
 
 ### Changed
 
@@ -22,10 +25,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `callAsync` is now a thin wrapper over `_callTargetAsync(alwaysAwait: true)`, eliminating the duplicated dispatch logic that previously lived in `callAsync`. The shared path also picks up the coroutine-aware await semantics (`_insideResumeAsync` flag) for free.
 - `resume` and `resumeAsync` share three private helpers — `_placeResumeArgs`, `_unwindAndPropagate`, `_popBodyFrame` — extracted from the original `resume` body. The async variant now sets an `_insideResumeAsync` flag for the duration of execution so `_callTargetAsync` knows to await host async closures encountered mid-frame.
 - `Closure.DartFuncAsync` constructor signature now takes a leading `String? name` argument. The change is contained within the library: `pushDartFunctionAsync` / `pushDartClosureAsync` are the only callers and both were updated. Direct external construction will need to be updated.
+- `openLibs` now registers the `event` standard library alongside the existing libraries.
+- `lib/lua.dart` gained a library-level doc comment and exports `lua_event_api.dart` and the `EventCallback`/`EventCallbackAsync` typedefs (but not the internal `EventBus`).
+- README.md and README_zh.md updated with full Event System documentation: Dart and Lua usage examples, API reference tables, and security sandbox notes.
+- `.gitignore` updated to exclude `flutter_luax/`.
+- Change sprintf package from Telosnex's fork `sprintf` to NaivG's fork `dart_sprintf`.
 
 ### Fixed
 
 - `coroutine.resume` and `coroutine.resumeAsync` now recognize `ACALL` as a valid resume point when placing resume arguments into the interrupted call's result slots (`_placeResumeArgs`). Previously the guard only matched `CALL` and `TAILCALL`, so a `coroutine.yield` inside a Lua function reached via `await` would drop the resume arguments on the floor. The change covers the new `ACALL` opcode alongside the two original cases.
+- Event `__event_fn_map` mapping flipped from `fn→ref` to `ref→fn`. Previously, duplicate registration of the same Lua function overwrote the earlier ref in the fn-map, producing ghost listeners and registry ref leaks. Since refs from `ls.ref()` are always unique ints, the `ref→fn` layout guarantees no collision. `event.off(name, fn)` now finds all matching refs via `rawEqual` iteration. Bug report submitted by @Kfira01.
+- Listener release (`_releaseEntry`) is now idempotent: uses `EventBus.removeById`'s boolean return as a guard to skip `unRef` and fn-map cleanup when the entry has already been removed by a prior `off`, `offById`, or `removeAllListeners`.
+- Sync `emit` no longer auto-removes async Dart listeners that were skipped (not invoked) during the sync pass. Only actually-invoked listeners are eligible for `once` cleanup.
 
 ### Tests
 
@@ -34,6 +45,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New `coroutine resume after await-call` regression group (two tests) covering `_placeResumeArgs` correctness when the interrupted call is an `ACALL` — both the implicit (coroutine body) and explicit (`await` keyword) await paths.
 - Three new `coroutine.resumeAsync` tests in `test/coroutine/coroutine_test.dart`: host async function called from a coroutine body, yielded values propagated to the caller, and error propagation as `(false, msg)`.
 - Existing async integration tests updated to use the `await` keyword now that it is the supported way to invoke host async functions from Lua.
+- New `event_test.dart` (`test/event/`) — 27 tests covering the full bidirectional event API: Dart-side `on`/`onAsync`/`once`/`off`/`offById`/`emit`/`emitAsync`/`removeAllListeners`, Lua-side `event.on`/`event.once`/`event.off`/`event.emit`/`event.emitAsync`, cross-side interop (Dart fires → Lua receives and vice versa), error isolation (listener errors don't stop others), once auto-removal, async listener skip in sync emit, shared bus across coroutines, and security (Lua cannot remove Dart listeners).
+- New `fn_map_duplicate_ref_leak_test.dart` (`test/bugfix/`) — regression test for the `ref→fn` fn-map fix: verifies that duplicate `event.on` registrations of the same Lua function produce independent listeners that can each be removed without ghost refs or double-unref.
 
 ## [0.3.1] - 2026-06-13
 

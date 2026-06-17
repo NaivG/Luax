@@ -18,6 +18,7 @@ Luax是一个纯Dart的Lua 5.3虚拟机，最初源自[LuaDardo Plus](https://gi
 - **Lua 5.3 模式匹配** — 从参考 C 实现移植，支持 `%b`（平衡匹配）和 `%f`（前沿模式）
 - **二进制数据** — `string.pack`、`string.unpack`、`string.packsize`、`string.dump`
 - **异步互操作** — 在 Lua 和 Dart 之间调用异步函数
+- **事件系统** — 双向 EventEmitter，桥接 Dart 与 Lua 回调
 - **公开的解析器与 AST** — `lua_parser.dart` 用于静态分析工具
 - **Web 平台** — 通过平台抽象层完整支持浏览器运行
 - **性能提升** — 解析器快 ~47%，VM 栈快 ~22%，sprintf 快 5 倍
@@ -223,6 +224,89 @@ local r, err = asyncFunc()
 | `pCallAsync(nArgs, nResults, err)` | 带错误处理的受保护异步调用 |
 | `doStringAsync(code)` | 异步执行 Lua 字符串 |
 | `doFileAsync(path)` | 异步执行 Lua 文件 |
+
+### 事件系统
+
+Luax 内置了一个双向 EventEmitter，允许 Dart 和 Lua 代码订阅和触发共享事件。
+
+#### Dart 端
+
+```dart
+final state = LuaState.newState();
+state.openLibs();
+
+// 从 Dart 订阅事件
+state.on('greet', (args) {
+  print('来自 Dart 的问候！${args.first}');
+});
+
+// 从 Dart 触发 — 同时触发 Dart 和 Lua 的监听器
+state.emit('greet', ['world']);
+
+// 一次性监听器
+state.once('login', (args) => print('用户已登录'));
+
+// 异步监听器
+state.onAsync('fetch', (args) async {
+  await Future.delayed(Duration(seconds: 1));
+  print('已获取 ${args.first}');
+});
+await state.emitAsync('fetch', ['data']);
+
+// 按 id 取消订阅
+final id = state.on('tick', (args) => print('tick'));
+state.off('tick', listenerId: id);
+```
+
+#### Lua 端
+
+```lua
+-- 从 Lua 订阅事件
+local id = event.on("greet", function(name)
+  print("来自 Lua 的问候！", name)
+end)
+
+-- 从 Lua 触发 — 同时触发 Dart 和 Lua 的监听器
+event.emit("greet", "world")
+
+-- 一次性监听器
+event.once("login", function()
+  print("用户已登录")
+end)
+
+-- 取消订阅
+event.off("greet", id)
+```
+
+#### Dart 事件 API 参考
+
+| 方法 | 说明 |
+|------|------|
+| `on(event, callback)` | 注册 Dart 监听器，返回监听器 id |
+| `onAsync(event, callback)` | 注册异步 Dart 监听器 |
+| `once(event, callback)` | 注册一次性监听器，首次触发后自动移除 |
+| `off(event, {callback, listenerId})` | 按回调引用或 id 移除监听器 |
+| `emit(event, [args])` | 同步触发所有监听器 |
+| `emitAsync(event, [args])` | 异步触发所有监听器 |
+| `removeAllListeners([event])` | 移除指定事件或所有事件的全部监听器 |
+
+#### Lua 事件 API 参考
+
+| 函数 | 说明 |
+|------|------|
+| `event.on(name, fn)` | 注册 Lua 监听器，返回监听器 id |
+| `event.once(name, fn)` | 注册一次性 Lua 监听器 |
+| `event.off(name, fn_or_id)` | 按函数引用或 id 移除监听器 |
+| `event.emit(name, ...)` | 同步触发所有监听器 |
+| `event.emitAsync(name, ...)` | 异步触发所有监听器 |
+
+#### 安全性
+
+在事件系统的设计之初，就已将安全沙箱机制纳入考量。Lua 端不允许执行任何可能对宿主系统构成风险的操作。
+
+通过 `off` 函数移除监听器时，Lua 端只能移除由其自身注册的监听器。而 `removeAllListeners` 仅在 Dart 端可用。这是为了防止 Lua 端意外移除监听器，从而导致 Dart 端崩溃。
+
+`emit` 和 `emitAsync` 函数可调用所有已注册的监听器。综合考虑下这种设计是可接受的。
 
 ## 语言特性
 
@@ -430,7 +514,7 @@ import 'package:luax/debug.dart';        // 调试工具
 
 ## 许可证
 
-Apache-2.0（与原始 LuaDardo 相同）
+Apache-2.0（与原始 LuaDardo 相同），详见 [LICENSE](LICENSE)。
 
 ## 致谢
 

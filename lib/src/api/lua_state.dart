@@ -2,6 +2,7 @@ import 'lua_aux_lib.dart';
 import 'lua_basic_api.dart';
 import 'lua_coroutine.dart';
 import 'lua_debug.dart';
+import 'lua_event_api.dart';
 import '../state/lua_state_impl.dart';
 
 const luaMinStack = 20;
@@ -20,7 +21,7 @@ int luaUpvalueIndex(int i) => luaRegistryIndex - i;
 /// Abstract base class for Lua state operations.
 /// Combines basic API, auxiliary library, coroutine support, and debug features.
 abstract class LuaState extends LuaBasicAPI
-    implements LuaAuxLib, LuaCoroutineLib, LuaDebug {
+    implements LuaAuxLib, LuaCoroutineLib, LuaDebug, LuaEventAPI {
   static LuaState newState() {
     return LuaStateImpl();
   }
