@@ -44,11 +44,13 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 'latest'
-
-      - run: npm ci
+      
+      - name: Install vitepress
+        run: npm install
         working-directory: docs-site
 
-      - run: npx vitepress build
+      - name: Build vitepress
+        run: npx vitepress build
         working-directory: docs-site
 
       - uses: actions/configure-pages@v5
