@@ -15,7 +15,7 @@ Luax 是一个纯 Dart 的 Lua 5.3 虚拟机，最初源自
 来使用。
 
 完整文档 — 指南、API 参考与架构深入解读 — 请访问
-[Luax 文档站](https://naivg.github.io/Luax/)。
+[Luax 文档站](https://luax.naivg.top/)。
 
 ## 特性
 
@@ -28,7 +28,7 @@ Luax 是一个纯 Dart 的 Lua 5.3 虚拟机，最初源自
 - **二进制数据** — `string.pack`、`string.unpack`、`string.packsize`、`string.dump`
 - **Flutter插件包** — 附带 [`flutter_luax`](https://github.com/NaivG/flutter_luax) 包以支持 Flutter Widget 绑定
 
-完整列表与详细说明请参阅[功能指南](https://naivg.github.io/Luax/guide/)。
+完整列表与详细说明请参阅[功能指南](https://luax.naivg.top/guide/)。
 
 ## 安装
 
@@ -70,13 +70,13 @@ Hello from Luax!	5
 
 ## 文档
 
-完整文档位于 **[naivg.github.io/Luax](https://naivg.github.io/Luax/)**：
+完整文档位于 **[luax.naivg.top](https://luax.naivg.top/)**：
 
-- [快速开始](https://naivg.github.io/Luax/guide/getting-started/) — 安装、第一个程序、从 Dart 调用 Lua
-- [指南](https://naivg.github.io/Luax/guide/) — Dart↔Lua 互操作、async/await、事件系统、协程、GC、Web、Flutter
-- [API 参考](https://naivg.github.io/Luax/api/lua/) — 由 `///` dartdoc 注释自动生成
-- [标准库](https://naivg.github.io/Luax/reference/standard-library/) — `string`、`math`、`table`、`os`、`coroutine`、`utf8` 等
-- [从 `lua_dardo` 迁移](https://naivg.github.io/Luax/migration/from-luadardo/) — 替换注意事项
+- [快速开始](https://luax.naivg.top/guide/getting-started) — 安装、第一个程序、从 Dart 调用 Lua
+- [指南](https://luax.naivg.top/guide/) — Dart↔Lua 互操作、async/await、事件系统、协程、GC、Web、Flutter
+- [API 参考](https://luax.naivg.top/api/lua/) — 由 `///` dartdoc 注释自动生成
+- [标准库](https://luax.naivg.top/guide/reference/standard-library) — `string`、`math`、`table`、`os`、`coroutine`、`utf8` 等
+- [从 `lua_dardo` 迁移](https://luax.naivg.top/guide/migration/from-luadardo) — 替换注意事项
 
 ## 许可证
 

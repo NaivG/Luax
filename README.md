@@ -16,7 +16,7 @@ of LuaDardo.
 
 For the full documentation — guides, API reference, and the architecture
 deep-dive — see the
-[Luax documentation site](https://naivg.github.io/Luax/).
+[Luax documentation site](https://luax.naivg.top/).
 
 ## Features
 
@@ -29,7 +29,7 @@ deep-dive — see the
 - **Binary data** — `string.pack`, `string.unpack`, `string.packsize`, and `string.dump`
 - **Flutter Extension** — companion [`flutter_luax`](https://github.com/NaivG/flutter_luax) package for Flutter widget bindings
 
-See the [Features guide](https://naivg.github.io/Luax/guide/) for the full
+See the [Features guide](https://luax.naivg.top/guide/) for the full
 list and deeper coverage.
 
 ## Installation
@@ -72,13 +72,13 @@ Hello from Luax!	5
 
 ## Documentation
 
-Full documentation lives at **[naivg.github.io/Luax](https://naivg.github.io/Luax/)**:
+Full documentation lives at **[luax.naivg.top](https://luax.naivg.top/)**:
 
-- [Getting Started](https://naivg.github.io/Luax/guide/guide/getting-started/) — installation, first program, calling Dart from Lua
-- [Guide](https://naivg.github.io/Luax/guide/guide/) — Dart↔Lua interop, async/await, event system, coroutines, GC, web, Flutter
-- [API Reference](https://naivg.github.io/Luax/api/lua/) — auto-generated from `///` dartdoc comments
-- [Standard Library](https://naivg.github.io/Luax/guide/reference/standard-library/) — `string`, `math`, `table`, `os`, `coroutine`, `utf8`, and more
-- [Migration from `lua_dardo`](https://naivg.github.io/Luax/guide/migration/from-luadardo/) — drop-in replacement notes
+- [Getting Started](https://luax.naivg.top/guide/guide/getting-started) — installation, first program, calling Dart from Lua
+- [Guide](https://luax.naivg.top/guide/guide/) — Dart↔Lua interop, async/await, event system, coroutines, GC, web, Flutter
+- [API Reference](https://luax.naivg.top/api/lua/) — auto-generated from `///` dartdoc comments
+- [Standard Library](https://luax.naivg.top/guide/reference/standard-library) — `string`, `math`, `table`, `os`, `coroutine`, `utf8`, and more
+- [Migration from `lua_dardo`](https://luax.naivg.top/guide/migration/from-luadardo) — drop-in replacement notes
 
 ## License
 
