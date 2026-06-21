@@ -44,8 +44,6 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 'latest'
-          cache: 'npm'
-          package-manager-cache: true
 
       - run: npm ci
         working-directory: docs-site
