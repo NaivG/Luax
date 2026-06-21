@@ -28,12 +28,6 @@ jobs:
           channel: stable
           cache: true
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: docs-site/package-lock.json
-
       - name: Install dependencies
         run: |
           dart pub global activate dartdoc_modern
@@ -46,6 +40,12 @@ jobs:
         run: |
           cp -r assets docs-site/api
           cp -f .github/docs/* docs-site
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 'latest'
+          cache: 'npm'
+          package-manager-cache: true
 
       - run: npm ci
         working-directory: docs-site
