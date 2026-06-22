@@ -53,6 +53,10 @@ jobs:
         run: npx vitepress build
         working-directory: docs-site
 
+      - name: Copy files
+        run: |
+          cp -f docs-site/.vitepress/public/favicon.svg docs-site/.vitepress/dist
+
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
